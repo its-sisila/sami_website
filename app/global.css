@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-pattern-opacity: 0.4;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #0898f5, #005ca6);
+  border-radius: 6px;
+}
+
+.section-padding {
+  @apply py-20 md:py-28;
+}
+
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-400 via-brand-500 to-brand-600;
+}
+
+[data-reduced-motion="true"] * {
+  animation: none !important;
+  transition: none !important;
+}
