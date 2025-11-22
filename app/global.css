@@ -48,3 +48,10 @@ body {
   animation: none !important;
   transition: none !important;
 }
+
+@media print {
+  *[style*="opacity:0"] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
