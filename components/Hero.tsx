@@ -21,8 +21,7 @@ export default function Hero() {
       aria-label="SAMI introduction hero"
     >
       {/* Background Effects */}
-      <div className="absolute inset-0 bg-black -z-20" />
-      <div className="absolute inset-0 bg-hero-grid bg-[size:60px_60px] opacity-[0.1] -z-10" />
+      <div className="absolute inset-0 bg-hero-grid bg-[size:60px_60px] opacity-[0.1] -z-10 [mask-image:linear-gradient(to_bottom,black_80%,transparent)]" />
 
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/20 rounded-full blur-[120px] animate-pulse-slow" />
