@@ -13,11 +13,18 @@ import Footer from "@/components/Footer";
 import DemoModal from "@/components/DemoModal";
 import { Suspense } from "react";
 
+import CursorSpotlight from "@/components/CursorSpotlight";
+
 export default function Page() {
   return (
     <>
+      <CursorSpotlight />
+
+      {/* Global Background Gradient */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-b from-black via-black to-brand-950/80" />
+
       <Header />
-      <main className="overflow-x-hidden">
+      <main className="overflow-x-hidden relative z-10">
         <Hero />
         <section id="who" className="section-padding">
           <WhoItIsFor />
