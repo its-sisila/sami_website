@@ -6,11 +6,11 @@ import { SITE_CONFIG } from "@/lib/site.config";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "SAMI – AI Operational & Market Intelligence for Fuel Stations",
+  title: "SAMI – Shed AI Manager Interface",
   description: SITE_CONFIG.meta.description,
   keywords: SITE_CONFIG.meta.keywords,
   openGraph: {
-    title: "SAMI – AI Operational & Market Intelligence for Fuel Stations",
+    title: "SAMI – Shed AI Manager Interface",
     description: SITE_CONFIG.meta.description,
     url: SITE_CONFIG.baseUrl,
     siteName: SITE_CONFIG.name,
