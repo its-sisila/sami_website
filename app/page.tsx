@@ -12,7 +12,8 @@ import CallToAction from "@/components/CallToAction";
 import Footer from "@/components/Footer";
 import DemoModal from "@/components/DemoModal";
 import { Suspense } from "react";
-
+import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import CursorSpotlight from "@/components/CursorSpotlight";
 
 export default function Page() {
@@ -70,6 +71,8 @@ export default function Page() {
       <Suspense>
         <DemoModal />
       </Suspense>
+      <Analytics />
+      <SpeedInsights />
     </>
   );
 }
