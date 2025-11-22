@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   title: "SAMI – Shed AI Manager Interface",
   description: SITE_CONFIG.meta.description,
   keywords: SITE_CONFIG.meta.keywords,
+  verification: {
+    google: "t4DXoiHxA8EV1NaI6gc7dLf_d77v3Ak_Pek33N4Lqag",
+  },
   openGraph: {
     title: "SAMI – Shed AI Manager Interface",
     description: SITE_CONFIG.meta.description,
