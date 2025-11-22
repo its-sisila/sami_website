@@ -1,63 +1,97 @@
+"use client";
+import { motion } from "framer-motion";
+import { Users, Building2, Briefcase, Calculator } from "lucide-react";
+
 const roles = [
   {
     title: "Owners",
     pain: "Need transparent performance & pricing insight.",
-    value:
-      "Unified visibility across sales, pricing & upcoming demand signals.",
+    value: "Unified visibility across sales, pricing & upcoming demand signals.",
+    icon: Users,
   },
   {
     title: "Multi-Site Operators",
     pain: "Hard to standardize intelligence across stations.",
-    value:
-      "Cross-location consistency with centralized forecasting & anomalies.",
+    value: "Cross-location consistency with centralized forecasting & anomalies.",
+    icon: Building2,
   },
   {
     title: "Managers",
     pain: "Shift closing friction & manual anomaly checks.",
     value: "Automated shift summaries & irregularity detection.",
+    icon: Briefcase,
   },
   {
     title: "Accountants",
     pain: "Reconciling costs, advances & salaries is time-consuming.",
     value: "Structured, auditable financial alignment from day one.",
+    icon: Calculator,
   },
 ];
 
 export default function WhoItIsFor() {
   return (
     <div className="mx-auto max-w-7xl px-4">
-      <header className="mb-12 max-w-2xl">
-        <h2 className="text-3xl md:text-4xl font-semibold mb-4">
-          Built For Real Operators
-        </h2>
-        <p className="text-neutral-600 dark:text-neutral-300">
+      <div className="mb-16 max-w-3xl mx-auto text-center">
+        <motion.h2
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-3xl md:text-5xl font-bold mb-6"
+        >
+          Built For <span className="gradient-text">Real Operators</span>
+        </motion.h2>
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2 }}
+          className="text-lg text-neutral-400"
+        >
           SAMI focuses on operator workflows first, so intelligence is embedded
           in daily routines, not an afterthought.
-        </p>
-      </header>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {roles.map((r) => (
-          <div
+        </motion.p>
+      </div>
+
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+        {roles.map((r, i) => (
+          <motion.div
             key={r.title}
-            className="group relative rounded-xl border bg-white/70 dark:bg-neutral-900/50 backdrop-blur border-neutral-200 dark:border-neutral-800 p-5 flex flex-col transition-colors hover:border-danger-300 dark:hover:border-danger-500"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1 }}
+            whileHover={{ y: -5 }}
+            className="group relative rounded-2xl border border-neutral-800 bg-neutral-900/50 backdrop-blur-sm p-6 flex flex-col transition-all duration-300 hover:border-brand-600/50"
           >
-            <span className="pointer-events-none absolute inset-y-0 left-0 w-1 rounded-l-xl bg-gradient-to-b from-danger-400 via-danger-500 to-danger-600 opacity-70 group-hover:opacity-100 transition-opacity" />
-            <h3 className="font-semibold text-lg mb-2 pr-2">{r.title}</h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3 leading-relaxed">
-              <span className="font-semibold text-danger-600 dark:text-danger-400 mr-1">
-                Pain:
-              </span>
-              <span className="text-neutral-600 dark:text-neutral-400">
-                {r.pain}
-              </span>
-            </p>
-            <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-              <span className="font-semibold text-brand-600 dark:text-brand-400 mr-1">
-                Value:
-              </span>
-              {r.value}
-            </p>
-          </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl" />
+
+            <div className="relative z-10">
+              <div className="w-10 h-10 rounded-lg bg-brand-900/20 flex items-center justify-center mb-4 text-brand-500 group-hover:scale-110 transition-transform">
+                <r.icon className="w-5 h-5" />
+              </div>
+
+              <h3 className="font-bold text-lg mb-4 text-neutral-100 group-hover:text-brand-400 transition-colors">
+                {r.title}
+              </h3>
+
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-red-950/30 border border-red-900/30">
+                  <p className="text-xs text-red-200/80 uppercase tracking-wider font-semibold mb-1">Pain</p>
+                  <p className="text-sm text-neutral-400 leading-relaxed">
+                    {r.pain}
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-brand-950/30 border border-brand-900/30">
+                  <p className="text-xs text-brand-200/80 uppercase tracking-wider font-semibold mb-1">Value</p>
+                  <p className="text-sm text-neutral-300 leading-relaxed">
+                    {r.value}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         ))}
       </div>
     </div>

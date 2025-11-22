@@ -4,6 +4,7 @@
 
 :root {
   --bg-pattern-opacity: 0.4;
+  color-scheme: dark;
 }
 
 html {
@@ -11,26 +12,36 @@ html {
 }
 
 body {
-  @apply bg-white text-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 antialiased;
+  @apply bg-black text-neutral-100 antialiased selection:bg-brand-600/30 selection:text-brand-200;
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
+
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #000000;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #0898f5, #005ca6);
-  border-radius: 6px;
+  background: #262626;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #404040;
 }
 
 .section-padding {
-  @apply py-20 md:py-28;
+  @apply py-24 md:py-32;
 }
 
 .gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-400 via-brand-500 to-brand-600;
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-500 via-red-500 to-brand-600;
+}
+
+.glass-panel {
+  @apply bg-glass backdrop-blur-md border border-white/10 shadow-xl;
 }
 
 [data-reduced-motion="true"] * {

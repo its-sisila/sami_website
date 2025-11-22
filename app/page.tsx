@@ -31,7 +31,7 @@ export default function Page() {
         </section>
         <section
           id="features"
-          className="section-padding bg-neutral-50 dark:bg-neutral-900/40"
+          className="section-padding"
         >
           <FeaturePillars />
         </section>
@@ -40,7 +40,7 @@ export default function Page() {
         </section>
         <section
           id="how-it-works"
-          className="section-padding bg-neutral-50 dark:bg-neutral-900/40"
+          className="section-padding"
         >
           <HowItWorks />
         </section>
@@ -49,7 +49,7 @@ export default function Page() {
         </section>
         <section
           id="pricing"
-          className="section-padding bg-neutral-50 dark:bg-neutral-900/40"
+          className="section-padding"
         >
           <PricingTeaser />
         </section>
@@ -58,7 +58,7 @@ export default function Page() {
         </section>
         <section
           id="faq"
-          className="section-padding bg-neutral-50 dark:bg-neutral-900/40"
+          className="section-padding"
         >
           <FAQ />
         </section>

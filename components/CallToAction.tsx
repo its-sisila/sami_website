@@ -1,28 +1,56 @@
+"use client";
 import { SITE_CONFIG } from "@/lib/site.config";
+import { motion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 
 export default function CallToAction() {
   return (
-    <div className="mx-auto max-w-5xl px-4 text-center">
-      <h2 className="text-3xl md:text-4xl font-semibold mb-6">
-        Ready to unlock market-aware station intelligence?
-      </h2>
-      <p className="text-neutral-600 dark:text-neutral-300 mb-8">
-        Request a curated walkthrough and see how SAMI adapts to your
-        operational realities.
-      </p>
-      <div className="flex flex-col sm:flex-row gap-4 justify-center">
-        <button
-          data-demo-trigger
-          className="inline-flex items-center justify-center rounded-md bg-brand-600 hover:bg-brand-500 px-8 py-3 text-white font-medium focus-visible:ring-2 focus-visible:ring-brand-400"
+    <div className="relative overflow-hidden">
+
+      <div className="relative z-10 mx-auto max-w-5xl px-4 text-center">
+        <motion.h2
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-4xl md:text-6xl font-bold mb-8 leading-tight"
         >
-          Request a Demo
-        </button>
-        <a
-          href={SITE_CONFIG.loginPath}
-          className="inline-flex items-center justify-center rounded-md border border-neutral-300 dark:border-neutral-700 px-8 py-3 font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          Ready to unlock <br />
+          <span className="gradient-text">market-aware intelligence?</span>
+        </motion.h2>
+
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2 }}
+          className="text-xl text-neutral-300 mb-12 max-w-2xl mx-auto"
         >
-          Already a Client? Login
-        </a>
+          Request a curated walkthrough and see how SAMI adapts to your
+          operational realities.
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4 }}
+          className="flex flex-col sm:flex-row gap-6 justify-center items-center"
+        >
+          <button
+            data-demo-trigger
+            className="group relative inline-flex items-center justify-center rounded-full bg-brand-600 px-8 py-4 text-white font-semibold text-lg shadow-lg shadow-brand-600/25 hover:bg-brand-500 hover:shadow-brand-600/40 transition-all duration-300 hover:-translate-y-1"
+          >
+            Request a Demo
+            <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
+
+          <a
+            href={SITE_CONFIG.loginPath}
+            className="text-neutral-400 font-medium hover:text-brand-500 transition-colors"
+          >
+            Already a Client? Login
+          </a>
+        </motion.div>
       </div>
     </div>
   );
