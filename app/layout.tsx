@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "SAMI – Fuel Station Intelligence",
+    title: "SAMI – Shed AI Manager Interface",
     description: SITE_CONFIG.meta.description,
   },
   metadataBase: new URL(SITE_CONFIG.baseUrl),
@@ -62,7 +62,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className={`${inter.variable} font-sans bg-hero-radial relative`}>
+      <body className={`${inter.variable} font-sans bg-black relative`}>
         {children}
       </body>
     </html>
