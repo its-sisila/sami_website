@@ -42,7 +42,7 @@ module.exports = {
       },
       backgroundImage: {
         "hero-radial":
-          "radial-gradient(circle at 50% 0%, rgba(225, 29, 72, 0.15), transparent 70%)",
+          "radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.05), transparent 70%)",
         "hero-grid":
           "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
         "gradient-dark": "linear-gradient(to bottom, #000000, #0a0a0a)",
