@@ -3,6 +3,8 @@ import { ArrowRight } from "lucide-react"
 import { ParticleTextEffect } from "./particle-text-effect"
 import { InfiniteSlider } from "./ui/infinite-slider"
 import { ProgressiveBlur } from "./ui/progressive-blur"
+import { SITE_CONFIG } from "@/lib/site.config";
+import Link from "next/link";
 
 export default function Hero() {
   return (
@@ -27,11 +29,12 @@ export default function Hero() {
           </h2>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button size="lg" className="bg-red-500 hover:bg-red-600 text-white group">
-              Login
+            <Button size="lg" className="bg-red-700 hover:bg-red-600 text-white group">
+              <Link href={SITE_CONFIG.loginPath}>Login</Link>
               <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
             </Button>
             <Button
+              data-demo-trigger
               size="lg"
               variant="outline"
               className="border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600 bg-transparent"
@@ -85,43 +88,15 @@ export default function Hero() {
                         width="auto"
                       />
                     </div>
-                    {/* <div className="flex">
-                      <img
-                        className="mx-auto h-5 w-fit invert opacity-60 hover:opacity-100 transition-opacity"
-                        src="/images/design-mode-images-lemonsqueezy.svg"
-                        alt="Lemon Squeezy Logo"
-                        height="20"
-                        width="auto"
-                      />
-                    </div>
                     <div className="flex">
                       <img
-                        className="mx-auto h-4 w-fit invert opacity-60 hover:opacity-100 transition-opacity"
-                        src="/images/design-mode-images-laravel.svg"
-                        alt="Laravel Logo"
+                        className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                        src="/images/shell_logo_circle_color.svg"
+                        alt="Shell Logo"
                         height="16"
                         width="auto"
                       />
                     </div>
-                    <div className="flex">
-                      <img
-                        className="mx-auto h-7 w-fit invert opacity-60 hover:opacity-100 transition-opacity"
-                        src="/images/design-mode-images-lilly.svg"
-                        alt="Lilly Logo"
-                        height="28"
-                        width="auto"
-                      />
-                    </div>
-
-                    <div className="flex">
-                      <img
-                        className="mx-auto h-6 w-fit invert opacity-60 hover:opacity-100 transition-opacity"
-                        src="/images/design-mode-images-openai.svg"
-                        alt="OpenAI Logo"
-                        height="24"
-                        width="auto"
-                      />
-                    </div> */}
                   </InfiniteSlider>
 
                   <ProgressiveBlur

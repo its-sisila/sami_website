@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { X } from "lucide-react";
 import { SITE_CONFIG } from "@/lib/site.config";
+import { submitDemoRequest } from "@/actions/submit-demo";
 
 const schema = z.object({
   name: z.string().min(2),
@@ -44,9 +45,12 @@ export default function DemoModal() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  function onSubmit(values: FormValues) {
-    // Placeholder: integrate API or mailer later
-    console.log("Demo request", values);
+  async function onSubmit(values: FormValues) {
+    const result = await submitDemoRequest(values);
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
     setSubmitted(true);
     setTimeout(() => {
       reset();
@@ -68,11 +72,11 @@ export default function DemoModal() {
       <div className="absolute inset-0 bg-neutral-900/50 backdrop-blur-sm" />
       <div
         ref={ref}
-        className="relative w-full max-w-lg rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-xl"
+        className="relative w-full max-w-lg rounded-xl border border-neutral-800 bg-black p-6 shadow-xl"
       >
         <button
           aria-label="Close modal"
-          className="absolute top-3 right-3 rounded-md p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          className="absolute top-3 right-3 rounded-md p-2 hover:bg-neutral-800"
           onClick={() => setOpen(false)}
         >
           <X className="h-5 w-5" />
@@ -98,8 +102,8 @@ export default function DemoModal() {
                 </label>
                 <input
                   {...register("name", { required: true })}
-                  className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                  placeholder="Jane Doe"
+                  className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-neutral-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  placeholder="First Name and Last Name"
                 />
                 {errors.name && (
                   <p className="mt-1 text-xs text-danger-600 dark:text-danger-400">
@@ -113,7 +117,7 @@ export default function DemoModal() {
                 </label>
                 <input
                   {...register("company", { required: true })}
-                  className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-neutral-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   placeholder="Station Group Ltd"
                 />
                 {errors.company && (
@@ -130,11 +134,11 @@ export default function DemoModal() {
               <input
                 type="email"
                 {...register("email", { required: true })}
-                className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                className="w-full rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 placeholder="you@company.com"
               />
               {errors.email && (
-                <p className="mt-1 text-xs text-danger-600 dark:text-danger-400">
+                <p className="mt-1 text-xs text-danger-400">
                   Valid email required
                 </p>
               )}
@@ -146,7 +150,7 @@ export default function DemoModal() {
               <textarea
                 {...register("message", { required: true })}
                 rows={4}
-                className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+                className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-neutral-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
                 placeholder="Number of stations, current tools, desired outcomes..."
               />
               {errors.message && (
@@ -167,11 +171,10 @@ export default function DemoModal() {
               </button>
               <div className="flex gap-2">
                 <a
-                  href={`mailto:${
-                    SITE_CONFIG.contactEmail
-                  }?subject=Request%20Demo%20(${encodeURIComponent(
-                    new Date().toISOString()
-                  )})`}
+                  href={`mailto:${SITE_CONFIG.contactEmail
+                    }?subject=Request%20Demo%20(${encodeURIComponent(
+                      new Date().toISOString()
+                    )})`}
                   className="text-sm px-4 py-2 rounded-md border border-brand-500 text-brand-600 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-500/10"
                 >
                   Email Instead

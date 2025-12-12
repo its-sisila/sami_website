@@ -22,14 +22,14 @@ export default function Page() {
       <CursorSpotlight />
 
       {/* Global Background Gradient */}
-      <div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-b from-black via-black to-brand-950/80" />
+      {/* Global Background Gradient removed */}
 
       <Header />
       <main className="overflow-x-hidden relative z-10">
         <Hero />
-        <section id="who" className="section-padding">
+        {/* <section id="who" className="section-padding">
           <WhoItIsFor />
-        </section>
+        </section> */}
         <section
           id="features"
           className="section-padding"
@@ -39,12 +39,12 @@ export default function Page() {
         <section id="stages" className="section-padding">
           <Timeline />
         </section>
-        <section
+        {/* <section
           id="how-it-works"
           className="section-padding"
         >
           <HowItWorks />
-        </section>
+        </section> */}
         <section id="benefits" className="section-padding">
           <Benefits />
         </section>
@@ -54,9 +54,9 @@ export default function Page() {
         >
           <PricingTeaser />
         </section>
-        <section id="security" className="section-padding">
+        {/* <section id="security" className="section-padding">
           <SecuritySnapshot />
-        </section>
+        </section> */}
         <section
           id="faq"
           className="section-padding"

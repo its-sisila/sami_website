@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 const navItems = [
   { href: "#features", label: "Features" },
   { href: "#stages", label: "Stages" },
-  { href: "#how-it-works", label: "How It Works" },
+  // { href: "#how-it-works", label: "How It Works" },
   { href: "#benefits", label: "Benefits" },
   { href: "#pricing", label: "Pricing" },
   { href: "#faq", label: "FAQ" },
@@ -61,13 +61,13 @@ export default function Header() {
         <div className="hidden lg:flex items-center gap-4">
           <a
             href={SITE_CONFIG.loginPath}
-            className="text-sm font-medium text-neutral-300 hover:text-brand-500 transition-colors"
+            className="text-sm font-medium rounded-full bg-brand-700 text-white px-6 py-2.5 hover:bg-brand-500 shadow-lg shadow-brand-600/20 hover:shadow-brand-600/40 transition-all hover:-translate-y-0.5"
           >
             Login
           </a>
           <button
             data-demo-trigger
-            className="text-sm font-medium rounded-full bg-brand-600 text-white px-6 py-2.5 hover:bg-brand-500 shadow-lg shadow-brand-600/20 hover:shadow-brand-600/40 transition-all hover:-translate-y-0.5"
+            className="text-sm font-medium text-neutral-300 hover:text-brand-500 transition-colors"
           >
             Request Demo
           </button>

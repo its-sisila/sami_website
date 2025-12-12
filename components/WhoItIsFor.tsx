@@ -4,25 +4,25 @@ import { Users, Building2, Briefcase, Calculator } from "lucide-react";
 
 const roles = [
   {
-    title: "Owners",
+    title: "Shed Owners",
     pain: "Need transparent performance & pricing insight.",
     value: "Unified visibility across sales, pricing & upcoming demand signals.",
     icon: Users,
   },
   {
-    title: "Multi-Site Operators",
+    title: "Multi-Shed Owners",
     pain: "Hard to standardize intelligence across stations.",
     value: "Cross-location consistency with centralized forecasting & anomalies.",
     icon: Building2,
   },
   {
-    title: "Managers",
+    title: "Shed Managers",
     pain: "Shift closing friction & manual anomaly checks.",
     value: "Automated shift summaries & irregularity detection.",
     icon: Briefcase,
   },
   {
-    title: "Accountants",
+    title: "Shed Accountants",
     pain: "Reconciling costs, advances & salaries is time-consuming.",
     value: "Structured, auditable financial alignment from day one.",
     icon: Calculator,

@@ -5,6 +5,10 @@ import { useState } from "react";
 
 const faqs = [
   {
+    q: "Who it is for?",
+    a: "SAMI is for owners and managers of fuel stations who want to improve their operational efficiency, reduce costs, and increase profits.",
+  },
+  {
     q: "Is there self-service signup?",
     a: "No. Onboarding is curated to ensure data structure and operational readiness align before forecasts are activated.",
   },
