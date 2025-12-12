@@ -1,28 +1,14 @@
-"use client"
-
 import { Button } from "./ui/button"
 import { ArrowRight } from "lucide-react"
 import { ParticleTextEffect } from "./particle-text-effect"
 import { InfiniteSlider } from "./ui/infinite-slider"
 import { ProgressiveBlur } from "./ui/progressive-blur"
-import { SITE_CONFIG } from "@/lib/site.config"
-import Link from "next/link"
-import { useEffect, useState } from "react"
+import { SITE_CONFIG } from "@/lib/site.config";
+import Link from "next/link";
 
 export default function Hero() {
-  const [isMobile, setIsMobile] = useState(false)
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    checkMobile()
-    window.addEventListener("resize", checkMobile)
-    return () => window.removeEventListener("resize", checkMobile)
-  }, [])
-
   return (
-    <section className="relative min-h-screen flex flex-col justify-between overflow-hidden py-20 px-4">
+    <section className="relative min-h-screen flex flex-col justify-between overflow-hidden pt-20 pb-4 md:py-20 px-4">
       {/* Full Screen Particle Effect */}
       <div className="absolute inset-0 z-0">
         <ParticleTextEffect
@@ -64,20 +50,11 @@ export default function Hero() {
                   <p className="text-end text-sm text-gray-400">Powering All Sheds</p>
                 </div>
                 <div className="relative py-6 md:w-[calc(100%-11rem)]">
-                  <InfiniteSlider durationOnHover={20} duration={40} gap={isMobile ? 40 : 112}>
-                    {/* <div className="flex">
-                      <img
-                        className="mx-auto h-5 w-fit invert opacity-60 hover:opacity-100 transition-opacity"
-                        src="/images/design-mode-images-nvidia.svg"
-                        alt="Nvidia Logo"
-                        height="20"
-                        width="auto"
-                      />
-                    </div> */}
-
+                  {/* Mobile View: Static Row */}
+                  <div className="md:hidden flex flex-row justify-center gap-6 items-center px-2">
                     <div className="flex">
                       <img
-                        className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                        className="mx-auto h-8 w-fit opacity-60 hover:opacity-100 transition-opacity"
                         src="/images/ioc_logo_circle_color.svg"
                         alt="IOC Logo"
                         height="16"
@@ -86,7 +63,7 @@ export default function Hero() {
                     </div>
                     <div className="flex">
                       <img
-                        className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                        className="mx-auto h-8 w-fit opacity-60 hover:opacity-100 transition-opacity"
                         src="/images/sinopec_logo_circle_color.svg"
                         alt="Sinopec Logo"
                         height="16"
@@ -95,7 +72,7 @@ export default function Hero() {
                     </div>
                     <div className="flex">
                       <img
-                        className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                        className="mx-auto h-8 w-fit opacity-60 hover:opacity-100 transition-opacity"
                         src="/images/ceypetco_logo_circle_color.svg"
                         alt="Ceypetco Logo"
                         height="20"
@@ -104,22 +81,64 @@ export default function Hero() {
                     </div>
                     <div className="flex">
                       <img
-                        className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                        className="mx-auto h-8 w-fit opacity-60 hover:opacity-100 transition-opacity"
                         src="/images/shell_logo_circle_color.svg"
                         alt="Shell Logo"
                         height="16"
                         width="auto"
                       />
                     </div>
-                  </InfiniteSlider>
+                  </div>
+
+                  {/* Desktop View: Infinite Slider */}
+                  <div className="hidden md:block">
+                    <InfiniteSlider durationOnHover={20} duration={40} gap={112}>
+                      <div className="flex">
+                        <img
+                          className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                          src="/images/ioc_logo_circle_color.svg"
+                          alt="IOC Logo"
+                          height="16"
+                          width="auto"
+                        />
+                      </div>
+                      <div className="flex">
+                        <img
+                          className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                          src="/images/sinopec_logo_circle_color.svg"
+                          alt="Sinopec Logo"
+                          height="16"
+                          width="auto"
+                        />
+                      </div>
+                      <div className="flex">
+                        <img
+                          className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                          src="/images/ceypetco_logo_circle_color.svg"
+                          alt="Ceypetco Logo"
+                          height="20"
+                          width="auto"
+                        />
+                      </div>
+                      <div className="flex">
+                        <img
+                          className="mx-auto h-9 w-fit opacity-60 hover:opacity-100 transition-opacity"
+                          src="/images/shell_logo_circle_color.svg"
+                          alt="Shell Logo"
+                          height="16"
+                          width="auto"
+                        />
+                      </div>
+                    </InfiniteSlider>
+                  </div>
 
                   <ProgressiveBlur
-                    className="pointer-events-none absolute left-0 top-0 h-full w-20"
+                    className="pointer-events-none absolute left-0 top-0 h-full w-20 hidden md:block"
                     direction="left"
                     blurIntensity={1}
                   />
                   <ProgressiveBlur
-                    className="pointer-events-none absolute right-0 top-0 h-full w-20"
+                    className="pointer-events-none absolute right-0 top-0 h-full w-20 hidden md:block"
                     direction="right"
                     blurIntensity={1}
                   />
