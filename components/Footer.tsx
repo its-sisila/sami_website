@@ -4,9 +4,8 @@ import Logo from "./Logo";
 const links = [
   { label: "Features", href: "#features" },
   { label: "Stages", href: "#stages" },
-  { label: "Security", href: "#security" },
+  { label: "Pricing", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
-  { label: "Contact", href: "#contact" },
 ];
 
 export default function Footer() {
@@ -67,7 +66,7 @@ export default function Footer() {
         <div>
           <h3 className="text-sm font-semibold mb-4 text-neutral-100 uppercase tracking-wider">Legal</h3>
           <ul className="space-y-3 text-sm">
-            {["Privacy Notice", "Terms", "Accessibility"].map((item) => (
+            {["Privacy Notice", "Terms", "Cookies"].map((item) => (
               <li key={item}>
                 <a
                   href="#"
