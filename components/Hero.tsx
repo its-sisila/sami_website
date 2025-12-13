@@ -29,9 +29,11 @@ export default function Hero() {
           </h2>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12 pointer-events-auto">
-            <Button size="lg" className="bg-red-700 hover:bg-red-600 text-white group">
-              <Link href={SITE_CONFIG.loginPath}>Login</Link>
-              <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+            <Button asChild size="lg" className="bg-red-700 hover:bg-red-600 text-white group">
+              <Link href={SITE_CONFIG.loginPath}>
+                Login
+                <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
             </Button>
             <Button
               data-demo-trigger
