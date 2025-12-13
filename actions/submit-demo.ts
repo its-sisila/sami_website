@@ -23,8 +23,9 @@ export async function submitDemoRequest(formData: z.infer<typeof schema>) {
 
     try {
         const data = await resend.emails.send({
-            from: "SAMI Demo Request <onboarding@resend.dev>", // Update this when you have a verified domain
-            to: ["delivered@resend.dev"], // Change this to your actual email
+            from: "SAMI Contact <contact@mail.getsami.app>",
+            replyTo: "contact@getsami.app",
+            to: ["contact@getsami.app"],
             subject: `New Demo Request from ${company}`,
             html: `
         <h2>New Demo Request</h2>
