@@ -1,4 +1,5 @@
 import { Analytics } from "@vercel/analytics/next";
+import { SITE_CONFIG } from "@/lib/site.config";
 export const metadata = {
   title: "Login to SAMI",
 };
@@ -15,7 +16,7 @@ export default function LoginPage() {
           </p>
           <div className="rounded-2xl border border-dashed border-white/25 bg-white/5 p-6 text-sm text-neutral-100 shadow-[0_0_20px_rgba(0,0,0,0.2)] backdrop-blur-sm">
             <p>
-              Please contact System Admin at <span className="font-semibold text-brand-400">sisila@ieee.org</span> to
+              Please contact System Admin at <span className="font-semibold text-brand-400">{SITE_CONFIG.contactEmail}</span> to
               request access.
             </p>
           </div>

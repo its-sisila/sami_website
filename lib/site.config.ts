@@ -1,13 +1,13 @@
 export const SITE_CONFIG = {
   name: "SAMI",
   fullName: "Shed AI Manager Interface",
-  domain: "sami.example",
-  baseUrl: "https://sami.example",
-  contactEmail: "sisila@ieee.org",
+  domain: "getsami.app",
+  baseUrl: "https://www.getsami.app",
+  contactEmail: "contact@getsami.app",
   loginPath: "/login",
-  demoMailTo: "mailto:sisila@ieee.org?subject=Request%20a%20SAMI%20Demo",
+  demoMailTo: "mailto:contact@getsami.app?subject=Request%20a%20SAMI%20Demo",
   social: {
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/company/sami-ai-company/",
     twitter: "#"
   },
   meta: {
