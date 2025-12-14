@@ -54,3 +54,15 @@ GET / 500 in 7002ms
   - **Location**: `components/Hero.tsx`
   - **Cause**: The `Button` component does not accept an `href` prop directly. It requires the `asChild` pattern to function as a link.
   - **Resolution**: Updated `Hero.tsx` to use `<Button asChild>` and wrapped a `<Link href={...}>` component inside it.
+
+### 2025-12-13 – Production Email Delivery Failure
+- **Error**: "Recipient not found: The email couldn't be delivered because the recipient address doesn't exist."
+  - **Location**: Resend dashboard → Emails → Email Events
+  - **Symptoms**: Demo form worked on localhost but failed on deployed site with "Failed to send email. Please try again later."
+  - **Root Cause**: Cloudflare Email Routing was configured for `contact@getsami.app`, but it was not a real mailbox. When Resend tried to deliver emails to this address, the receiving server rejected them as the "recipient not found."
+  - **Initial Debugging**: Checked Vercel environment variables (`RESEND_API_KEY` was correctly set). No errors in Vercel function logs because Resend accepted the email for delivery, but it bounced afterwards.
+  - **Resolution**: User purchased a Titan Pro email account for `contact@getsami.app`, creating a real mailbox. Emails now deliver successfully.
+  
+- **Architecture Finalized**:
+  - **Sending**: Resend via `mail.getsami.app` subdomain (verified in Resend)
+  - **Receiving**: Titan Pro at `contact@getsami.app` (MX records point to Titan)
