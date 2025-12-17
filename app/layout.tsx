@@ -6,14 +6,14 @@ import { SITE_CONFIG } from "@/lib/site.config";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "SAMI – Shed AI Manager Interface",
+  title: "SAMI - Shed AI Manager Interface",
   description: SITE_CONFIG.meta.description,
   keywords: SITE_CONFIG.meta.keywords,
   verification: {
     google: "t4DXoiHxA8EV1NaI6gc7dLf_d77v3Ak_Pek33N4Lqag",
   },
   openGraph: {
-    title: "SAMI – Shed AI Manager Interface",
+    title: "SAMI - Shed AI Manager Interface",
     description: SITE_CONFIG.meta.description,
     url: SITE_CONFIG.baseUrl,
     siteName: SITE_CONFIG.name,
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "SAMI – Shed AI Manager Interface",
+    title: "SAMI - Shed AI Manager Interface",
     description: SITE_CONFIG.meta.description,
   },
   metadataBase: new URL(SITE_CONFIG.baseUrl),
