@@ -49,8 +49,15 @@ export default function Footer() {
                 {SITE_CONFIG.contactEmail}
               </a>
             </li>
-            <li className="text-neutral-500 italic">
-              Enterprise solutions only
+            <li>
+              <a
+                href={SITE_CONFIG.social.linkedin}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-neutral-400 hover:text-brand-500 transition-colors"
+              >
+                LinkedIn
+              </a>
             </li>
             <li>
               <a

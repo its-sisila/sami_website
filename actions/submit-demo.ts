@@ -24,7 +24,7 @@ export async function submitDemoRequest(formData: z.infer<typeof schema>) {
     try {
         const data = await resend.emails.send({
             from: "SAMI Contact <contact@mail.getsami.app>",
-            replyTo: "contact@getsami.app",
+            replyTo: email,
             to: ["contact@getsami.app"],
             subject: `New Demo Request from ${company}`,
             html: `
@@ -39,7 +39,7 @@ export async function submitDemoRequest(formData: z.infer<typeof schema>) {
 
         if (data.error) {
             console.error("Resend Error:", data.error);
-            return { error: "Failed to send email. Please try again later." };
+            return { error: "Failed to send email. Please send an Email instead" };
         }
 
         return { success: true };
