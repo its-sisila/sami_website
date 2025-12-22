@@ -42,3 +42,67 @@ Even after fixing individual pages, some components and the global background co
 **Fix:**  
 
 - Updated `app/layout.tsx` to enforce `bg-background` and `text-foreground` on the `body` tag, ensuring a fail-safe theme application across the entire app.
+
+---
+
+## 2025-12-21 - TypeScript Build Errors
+
+### 1. Parameter 'val' Implicitly Has an 'any' Type
+
+**Issue:**  
+Build failed with multiple TypeScript errors: `Parameter 'val' implicitly has an 'any' type` in `onValueChange` handlers across several Select components.
+
+**Affected Files:**
+
+- `app/(accounts)/accounts/page.tsx` - Lines 379, 1296, 1314, 1547, 1561, 1584
+
+**Fix:**  
+Added explicit `string` type annotation to all `val` parameters in `onValueChange` handlers:
+
+```tsx
+// Before
+onValueChange={(val) => setTimeRange(val as TimeRange)}
+
+// After  
+onValueChange={(val: string) => setTimeRange(val as TimeRange)}
+```
+
+### 2. Type Literal Mismatch in Staff Page
+
+**Issue:**  
+TypeScript error in `getMockShiftHistory` function where the ternary operator `i % 2 === 0 ? "Day" : "Night"` was inferred as `string` instead of `"Day" | "Night"`.
+
+**Affected File:**
+
+- `app/(staff)/staff/page.tsx` - Line 208
+
+**Fix:**  
+Added type assertion to the shift property:
+
+```tsx
+// Before
+shift: i % 2 === 0 ? "Day" : "Night",
+
+// After
+shift: (i % 2 === 0 ? "Day" : "Night") as "Day" | "Night",
+```
+
+### 3. Comparison Between Incompatible Literal Types
+
+**Issue:**  
+TypeScript error: `This comparison appears to be unintentional because the types '"Night"' and '"Day"' have no overlap`. The `LAST_SHIFT.type` was typed as literal `"Night"` using `as const`, but then compared to `"Day"`.
+
+**Affected File:**
+
+- `app/(dashboard)/dashboard/page.tsx` - Line 244
+
+**Fix:**  
+Changed the type assertion from narrow literal to union type:
+
+```tsx
+// Before
+type: "Night" as const,
+
+// After
+type: "Night" as "Day" | "Night",
+```
