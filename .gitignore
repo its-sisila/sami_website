@@ -28,7 +28,7 @@ venv/
 env/
 .env
 .pytest_cache/
-
+services/api/venv312
 # Environment Variables
 .env
 .env.local
