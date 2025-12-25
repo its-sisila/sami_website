@@ -81,6 +81,18 @@ const COMPANIES: Company[] = [
 
 const EXPENSE_CATEGORIES = ["Transport", "Bowser", "Bills", "Utilities", "Refreshments", "Maintenance", "Office Supplies", "Other"];
 
+// Category to Payee mapping
+const CATEGORY_PAYEES: Record<string, string[]> = {
+    "Transport": ["Threewheeler", "Bike", "Other"],
+    "Bowser": ["Bowser Highway", "Bowser Repair", "Other"],
+    "Bills": ["Dialog", "SLT", "Credit Card Payment", "Chairman Vehicle Fuel", "Other"],
+    "Utilities": ["CEB", "LECO", "Water Board", "Tax", "Lease", "Generator Fuel", "Other"],
+    "Refreshments": ["Soft Drinks", "Lunch", "Snacks", "Bottled Water", "Other"],
+    "Maintenance": ["Electrician", "Plumber", "AC Technician", "Pump Technician", "General Repair", "Other"],
+    "Office Supplies": ["Stationery", "Printing", "Computer Accessories", "Cleaning Supplies", "Other"],
+    "Other": ["Other"],
+};
+
 export default function SalesPage() {
     const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [shift, setShift] = useState<"Day" | "Night">("Day");
@@ -552,13 +564,41 @@ export default function SalesPage() {
                                                     <option key={cat} value={cat}>{cat}</option>
                                                 ))}
                                             </select>
-                                            <input
-                                                type="text"
-                                                placeholder="Payee"
-                                                className="col-span-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
-                                                value={entry.payee || ""}
-                                                onChange={(e) => updateExpenseEntry(entry.id, "payee", e.target.value)}
-                                            />
+                                            {(() => {
+                                                const payees = CATEGORY_PAYEES[entry.category] || ["Other"];
+                                                const isOtherSelected = entry.payee === "__OTHER__" || (entry.payee && !payees.includes(entry.payee) && entry.payee !== "");
+                                                return (
+                                                    <>
+                                                        <select
+                                                            className="col-span-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                                                            value={isOtherSelected ? "__OTHER__" : entry.payee}
+                                                            onChange={(e) => {
+                                                                if (e.target.value === "__OTHER__") {
+                                                                    updateExpenseEntry(entry.id, "payee", "__OTHER__");
+                                                                } else {
+                                                                    updateExpenseEntry(entry.id, "payee", e.target.value);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <option value="">Select Payee</option>
+                                                            {payees.map((payee) => (
+                                                                <option key={payee} value={payee === "Other" ? "__OTHER__" : payee}>
+                                                                    {payee}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        {isOtherSelected && (
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Enter Payee Name"
+                                                                className="col-span-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                                                                value={entry.payee === "__OTHER__" ? "" : entry.payee}
+                                                                onChange={(e) => updateExpenseEntry(entry.id, "payee", e.target.value || "__OTHER__")}
+                                                            />
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
                                             <input
                                                 type="text"
                                                 placeholder="Invoice No"
