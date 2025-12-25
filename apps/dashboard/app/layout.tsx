@@ -18,11 +18,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} antialiased h-screen flex overflow-hidden bg-background`}>
+      <body className={`${inter.className} antialiased h-screen flex overflow-hidden bg-background`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="light"
+          forcedTheme="light"
           disableTransitionOnChange
         >
           {/* Sidebar - Desktop Only for now */}
