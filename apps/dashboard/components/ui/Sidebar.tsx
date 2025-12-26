@@ -14,6 +14,11 @@ import {
     Shield,
     LogOut,
     Fuel,
+    ChartGantt,
+    ChartBarIncreasing,
+    ChartBarIncreasingIcon,
+    ChartBarIcon,
+    ChartColumnIncreasing,
 } from "lucide-react";
 import { ThemeToggle } from "../theme-toggle";
 
@@ -21,11 +26,11 @@ const NAV_ITEMS = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Sales", href: "/sales", icon: Banknote },
     { name: "Inventory", href: "/inventory", icon: Droplets },
-    { name: "Orders", href: "/orders", icon: ShoppingCart },
-    { name: "Deposits", href: "/deposits", icon: Landmark },
-    { name: "Accounts", href: "/accounts", icon: Users },
+    // { name: "Orders", href: "/orders", icon: ShoppingCart },
+    // { name: "Deposits", href: "/deposits", icon: Landmark },
+    { name: "Accounts", href: "/accounts", icon: ChartColumnIncreasing },
     { name: "Staff", href: "/staff", icon: UserCog },
-    { name: "Admin Panel", href: "/admin/stations", icon: Shield },
+    // { name: "Admin Panel", href: "/admin/stations", icon: Shield },
 ];
 
 export function Sidebar() {
@@ -52,7 +57,7 @@ export function Sidebar() {
                             key={item.href}
                             href={item.href}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
-                                ? "bg-blue-600 text-white"
+                                ? "bg-red-800 text-white"
                                 : "text-slate-400 hover:bg-slate-800 hover:text-white"
                                 }`}
                         >
