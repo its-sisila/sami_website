@@ -146,7 +146,7 @@ async def list_regulatory_returns(
         select(RegulatoryReturn)
         .join(Tank, RegulatoryReturn.tank_id == Tank.id)
         .where(Tank.station_id == station_id)
-        .order_by(RegulatoryReturn.date.desc(), RegulatoryReturn.created_at.desc())
+        .order_by(RegulatoryReturn.return_date.desc(), RegulatoryReturn.created_at.desc())
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
@@ -169,6 +169,7 @@ async def create_regulatory_return(
         id=uuid4(),
         tank_id=data.tank_id,
         shift_id=data.shift_id,
+        staff_id=data.staff_id,
         liters_returned=data.liters_returned,
         reason=data.reason,
         return_date=data.return_date or date.today(),
