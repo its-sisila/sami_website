@@ -77,11 +77,11 @@ class Nozzle(Base):
     
     __tablename__ = "nozzles"
     
-    nozzle_id: Mapped[UUID] = mapped_column("nozzle_id", primary_key=True)
+    nozzle_id: Mapped[str] = mapped_column("nozzle_id", String(50), primary_key=True)
     pump_id: Mapped[UUID] = mapped_column(ForeignKey("pumps.id", ondelete="CASCADE"))
     tank_id: Mapped[UUID] = mapped_column(ForeignKey("tanks.id", ondelete="RESTRICT"))
     product_id: Mapped[UUID] = mapped_column(ForeignKey("fuel_products.id", ondelete="RESTRICT"))
-    nozzle_name: Mapped[str | None] = mapped_column("nozzle_name", String(100))
+    nozzle_name: Mapped[str | None] = mapped_column("nozzle_name", String(100))  # Display name (e.g., LAD-1)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -106,6 +106,7 @@ class TankReading(Base):
     # Staff fields - stored as JSON arrays of employee IDs
     staff_responsible_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     monitored_by_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    meter_readings: Mapped[list | None] = mapped_column(JSON, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
