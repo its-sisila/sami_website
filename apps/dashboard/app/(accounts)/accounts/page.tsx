@@ -47,6 +47,7 @@ import type {
     CardSettlement as ApiCardSettlement,
     ShiftSettlement as ApiShiftSettlement,
 } from "@/lib/api/types"
+import { companyAccountSchema, terminalSchema, settlementSchema, depositSchema, extractZodErrors } from "@/lib/validations/accounts"
 
 // --- Types & Helpers ---
 
@@ -1025,8 +1026,17 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
         setErrorDialogOpen(true)
     }
 
+    // Validation error state for settlements
+    const [settlementErrors, setSettlementErrors] = React.useState<Record<string, string>>({})
+
     const handleAddSettlement = async () => {
-        if (!newSettlement.batchId || !newSettlement.terminalId || !newSettlement.amount) return
+        // Validate with Zod
+        const result = settlementSchema.safeParse(newSettlement)
+        if (!result.success) {
+            setSettlementErrors(extractZodErrors(result.error))
+            return
+        }
+        setSettlementErrors({})
 
         setIsSavingSettlement(true)
         try {
@@ -1039,7 +1049,7 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
 
             await api.settlements.createCardSettlement({
                 terminal_id: terminal.id,
-                batch_id: newSettlement.batchId,
+                batch_id: newSettlement.batchId!,
                 settlement_date: newSettlement.date || new Date().toISOString().split('T')[0],
                 settlement_time: newSettlement.time || null,
                 amount: Number(newSettlement.amount),
@@ -1083,8 +1093,17 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
     const [editForm, setEditForm] = React.useState<Partial<Terminal>>({})
     const [isSavingTerminal, setIsSavingTerminal] = React.useState(false)
 
+    // Validation error state for terminals
+    const [terminalErrors, setTerminalErrors] = React.useState<Record<string, string>>({})
+
     const handleAddTerminal = async () => {
-        if (!newTerminal.terminalId || !newTerminal.bankAccount) return
+        // Validate with Zod
+        const result = terminalSchema.safeParse(newTerminal)
+        if (!result.success) {
+            setTerminalErrors(extractZodErrors(result.error))
+            return
+        }
+        setTerminalErrors({})
 
         setIsSavingTerminal(true)
         try {
@@ -1096,8 +1115,8 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
 
             await api.settlements.createTerminal({
                 provider: providerMap[newTerminal.provider || 'VISA/MASTER'] || 'visa_master',
-                terminal_id: newTerminal.terminalId,
-                bank_account: newTerminal.bankAccount,
+                terminal_id: newTerminal.terminalId!,
+                bank_account: newTerminal.bankAccount!,
                 label: null
             })
 
@@ -1107,7 +1126,7 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
             setIsAdding(false)
             setNewTerminal({ provider: "VISA/MASTER", status: "active" })
         } catch (err: any) {
-            alert(`Failed to create terminal: ${err.message || err.detail || "Unknown error"}`)
+            showError(`Failed to create terminal: ${err.message || err.detail || "Unknown error"}`)
         } finally {
             setIsSavingTerminal(false)
         }
@@ -1421,20 +1440,26 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                                 <div className="space-y-1">
                                     <Label className="text-xs">Terminal ID</Label>
                                     <Input
-                                        className="h-7 text-xs"
+                                        className={`h-7 text-xs ${terminalErrors.terminalId ? 'border-destructive' : ''}`}
                                         placeholder="XXXXXXXX"
                                         value={newTerminal.terminalId || ""}
                                         onChange={(e) => setNewTerminal({ ...newTerminal, terminalId: e.target.value })}
                                     />
+                                    {terminalErrors.terminalId && (
+                                        <p className="text-xs text-destructive">{terminalErrors.terminalId}</p>
+                                    )}
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-xs">Bank Account</Label>
                                     <Input
-                                        className="h-7 text-xs"
+                                        className={`h-7 text-xs ${terminalErrors.bankAccount ? 'border-destructive' : ''}`}
                                         placeholder="DFCC - XXXX"
                                         value={newTerminal.bankAccount || ""}
                                         onChange={(e) => setNewTerminal({ ...newTerminal, bankAccount: e.target.value })}
                                     />
+                                    {terminalErrors.bankAccount && (
+                                        <p className="text-xs text-destructive">{terminalErrors.bankAccount}</p>
+                                    )}
                                 </div>
                                 <div className="flex items-end gap-2">
                                     <Button size="sm" className="h-7 text-xs" onClick={handleAddTerminal} disabled={isSavingTerminal}>
@@ -1646,8 +1671,11 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                                         placeholder="#B-XXX"
                                         value={newSettlement.batchId || ""}
                                         onChange={(e) => setNewSettlement({ ...newSettlement, batchId: e.target.value })}
-                                        className="h-8"
+                                        className={`h-8 ${settlementErrors.batchId ? 'border-destructive' : ''}`}
                                     />
+                                    {settlementErrors.batchId && (
+                                        <p className="text-xs text-destructive">{settlementErrors.batchId}</p>
+                                    )}
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-xs">Date</Label>
@@ -1655,8 +1683,11 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                                         type="date"
                                         value={newSettlement.date || ""}
                                         onChange={(e) => setNewSettlement({ ...newSettlement, date: e.target.value })}
-                                        className="h-8"
+                                        className={`h-8 ${settlementErrors.date ? 'border-destructive' : ''}`}
                                     />
+                                    {settlementErrors.date && (
+                                        <p className="text-xs text-destructive">{settlementErrors.date}</p>
+                                    )}
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-xs">Time</Label>
@@ -1673,7 +1704,7 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                                         value={newSettlement.terminalId || ""}
                                         onValueChange={(val: string) => setNewSettlement({ ...newSettlement, terminalId: val })}
                                     >
-                                        <SelectTrigger className="h-8">
+                                        <SelectTrigger className={`h-8 ${settlementErrors.terminalId ? 'border-destructive' : ''}`}>
                                             <SelectValue placeholder="Select" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1684,6 +1715,9 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    {settlementErrors.terminalId && (
+                                        <p className="text-xs text-destructive">{settlementErrors.terminalId}</p>
+                                    )}
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-xs">Shift</Label>
@@ -1707,8 +1741,11 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                                         placeholder="0"
                                         value={newSettlement.amount || ""}
                                         onChange={(e) => setNewSettlement({ ...newSettlement, amount: Number(e.target.value) })}
-                                        className="h-8"
+                                        className={`h-8 ${settlementErrors.amount ? 'border-destructive' : ''}`}
                                     />
+                                    {settlementErrors.amount && (
+                                        <p className="text-xs text-destructive">{settlementErrors.amount}</p>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex gap-2 mt-4">
@@ -1890,14 +1927,23 @@ function DepositsView({ deposits }: DepositsViewProps) {
         setErrorDialogOpen(true)
     }
 
+    // Validation error state for deposits
+    const [depositErrors, setDepositErrors] = React.useState<Record<string, string>>({})
+
     // Handle add deposit
     const handleAddDeposit = async () => {
-        if (!newDeposit.bank || !newDeposit.method || !newDeposit.amount || !newDeposit.ref) return
+        // Validate with Zod
+        const result = depositSchema.safeParse(newDeposit)
+        if (!result.success) {
+            setDepositErrors(extractZodErrors(result.error))
+            return
+        }
+        setDepositErrors({})
 
         setIsSavingDeposit(true)
         try {
             // Parse bank value "BankName|AccountNumber"
-            const [bankName, accountNumber] = newDeposit.bank.split('|')
+            const [bankName, accountNumber] = newDeposit.bank!.split('|')
 
             // Create shift settlement (cash deposit)
             // Note: We need a valid shift_id. For now, since we don't have shift management fully integrated
@@ -1966,9 +2012,9 @@ function DepositsView({ deposits }: DepositsViewProps) {
                 shift_id: shiftId, // usage of placeholder might fail 500
                 bank_name: bankName,
                 bank_account: accountNumber,
-                deposit_method: newDeposit.method,
+                deposit_method: newDeposit.method!,
                 amount: Number(newDeposit.amount),
-                reference_number: newDeposit.ref,
+                reference_number: newDeposit.ref!,
                 deposit_time: new Date().toISOString(),
                 notes: null
             })
@@ -2115,7 +2161,7 @@ function DepositsView({ deposits }: DepositsViewProps) {
                                 <div className="space-y-2">
                                     <Label>Bank Account</Label>
                                     <Select value={newDeposit.bank} onValueChange={(val: string) => setNewDeposit({ ...newDeposit, bank: val })}>
-                                        <SelectTrigger>
+                                        <SelectTrigger className={depositErrors.bank ? 'border-destructive' : ''}>
                                             <SelectValue placeholder="Select Bank" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -2124,12 +2170,15 @@ function DepositsView({ deposits }: DepositsViewProps) {
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    {depositErrors.bank && (
+                                        <p className="text-xs text-destructive">{depositErrors.bank}</p>
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label>Deposit Method</Label>
                                     <Select value={newDeposit.method} onValueChange={(val: string) => setNewDeposit({ ...newDeposit, method: val })}>
-                                        <SelectTrigger>
+                                        <SelectTrigger className={depositErrors.method ? 'border-destructive' : ''}>
                                             <SelectValue placeholder="Select Method" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -2138,6 +2187,9 @@ function DepositsView({ deposits }: DepositsViewProps) {
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    {depositErrors.method && (
+                                        <p className="text-xs text-destructive">{depositErrors.method}</p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
@@ -2168,19 +2220,26 @@ function DepositsView({ deposits }: DepositsViewProps) {
                                     <Input
                                         type="number"
                                         placeholder="0.00"
-                                        className="font-mono"
+                                        className={`font-mono ${depositErrors.amount ? 'border-destructive' : ''}`}
                                         value={newDeposit.amount || ""}
                                         onChange={(e) => setNewDeposit({ ...newDeposit, amount: Number(e.target.value) })}
                                     />
+                                    {depositErrors.amount && (
+                                        <p className="text-xs text-destructive">{depositErrors.amount}</p>
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label>Reference Number</Label>
                                     <Input
                                         placeholder="Enter Slip/CDM Ref"
+                                        className={depositErrors.ref ? 'border-destructive' : ''}
                                         value={newDeposit.ref || ""}
                                         onChange={(e) => setNewDeposit({ ...newDeposit, ref: e.target.value })}
                                     />
+                                    {depositErrors.ref && (
+                                        <p className="text-xs text-destructive">{depositErrors.ref}</p>
+                                    )}
                                 </div>
 
                                 <Button className="w-full" size="lg" onClick={handleAddDeposit} disabled={isSavingDeposit}>
@@ -2661,6 +2720,7 @@ export default function AccountsPage() {
         creditLimit: 0,
         currentBalance: 0
     })
+    const [companyErrors, setCompanyErrors] = React.useState<Record<string, string>>({})
 
     const handleVerifyDeposit = (id: string) => {
         setDeposits(deposits.map(d => d.id === id ? { ...d, status: "Verified" } : d))
@@ -2671,12 +2731,25 @@ export default function AccountsPage() {
     }
 
     const handleAddCompany = async () => {
-        if (!newCompany.name) return
+        // Validate with Zod
+        const result = companyAccountSchema.safeParse({
+            name: newCompany.name || '',
+            contactPerson: newCompany.contactPerson || '',
+            contactNumber: newCompany.contactNumber || '',
+            email: newCompany.email || '',
+            creditLimit: newCompany.creditLimit || 0,
+        })
 
+        if (!result.success) {
+            setCompanyErrors(extractZodErrors(result.error))
+            return
+        }
+
+        setCompanyErrors({})
         setIsCreating(true)
         try {
             const data: CompanyAccountCreate = {
-                name: newCompany.name,
+                name: newCompany.name!,
                 contact_person: newCompany.contactPerson || null,
                 contact_number: newCompany.contactNumber || null,
                 email: newCompany.email || null,
@@ -2760,25 +2833,32 @@ export default function AccountsPage() {
                                 <div className="grid gap-4 py-4">
                                     <div className="grid grid-cols-4 items-center gap-4">
                                         <Label htmlFor="name" className="text-right">
-                                            Name
+                                            Name *
                                         </Label>
-                                        <Input
-                                            id="name"
-                                            value={newCompany.name || ''}
-                                            onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
-                                            className="col-span-3"
-                                        />
+                                        <div className="col-span-3">
+                                            <Input
+                                                id="name"
+                                                value={newCompany.name || ''}
+                                                onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
+                                                className={companyErrors.name ? 'border-destructive' : ''}
+                                            />
+                                            {companyErrors.name && <p className="text-xs text-destructive mt-1">{companyErrors.name}</p>}
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-4 items-center gap-4">
                                         <Label htmlFor="contact" className="text-right">
                                             Contact
                                         </Label>
-                                        <Input
-                                            id="contact"
-                                            value={newCompany.contactNumber || ''}
-                                            onChange={(e) => setNewCompany({ ...newCompany, contactNumber: e.target.value })}
-                                            className="col-span-3"
-                                        />
+                                        <div className="col-span-3">
+                                            <Input
+                                                id="contact"
+                                                value={newCompany.contactNumber || ''}
+                                                onChange={(e) => setNewCompany({ ...newCompany, contactNumber: e.target.value })}
+                                                className={companyErrors.contactNumber ? 'border-destructive' : ''}
+                                                placeholder="10-digit number (optional)"
+                                            />
+                                            {companyErrors.contactNumber && <p className="text-xs text-destructive mt-1">{companyErrors.contactNumber}</p>}
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-4 items-center gap-4">
                                         <Label htmlFor="person" className="text-right">
@@ -2806,25 +2886,31 @@ export default function AccountsPage() {
                                         <Label htmlFor="email" className="text-right">
                                             Email
                                         </Label>
-                                        <Input
-                                            id="email"
-                                            type="email"
-                                            value={newCompany.email || ''}
-                                            onChange={(e) => setNewCompany({ ...newCompany, email: e.target.value })}
-                                            className="col-span-3"
-                                        />
+                                        <div className="col-span-3">
+                                            <Input
+                                                id="email"
+                                                type="email"
+                                                value={newCompany.email || ''}
+                                                onChange={(e) => setNewCompany({ ...newCompany, email: e.target.value })}
+                                                className={companyErrors.email ? 'border-destructive' : ''}
+                                            />
+                                            {companyErrors.email && <p className="text-xs text-destructive mt-1">{companyErrors.email}</p>}
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-4 items-center gap-4">
                                         <Label htmlFor="limit" className="text-right">
-                                            Limit
+                                            Limit *
                                         </Label>
-                                        <Input
-                                            id="limit"
-                                            type="number"
-                                            value={newCompany.creditLimit || ''}
-                                            onChange={(e) => setNewCompany({ ...newCompany, creditLimit: Number(e.target.value) })}
-                                            className="col-span-3"
-                                        />
+                                        <div className="col-span-3">
+                                            <Input
+                                                id="limit"
+                                                type="number"
+                                                value={newCompany.creditLimit || ''}
+                                                onChange={(e) => setNewCompany({ ...newCompany, creditLimit: Number(e.target.value) })}
+                                                className={companyErrors.creditLimit ? 'border-destructive' : ''}
+                                            />
+                                            {companyErrors.creditLimit && <p className="text-xs text-destructive mt-1">{companyErrors.creditLimit}</p>}
+                                        </div>
                                     </div>
                                 </div>
                                 <DialogFooter>
