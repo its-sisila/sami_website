@@ -6,10 +6,14 @@ import { RegulatoryReturnForm } from "@/components/inventory/RegulatoryReturnFor
 import { RegulatoryReturnHistory } from "@/components/inventory/RegulatoryReturnHistory";
 import { FuelOrdersManager } from "@/components/inventory/FuelOrdersManager";
 import { InventoryHistoryTable } from "@/components/inventory/InventoryHistoryTable";
+import { TankCreationForm } from "@/components/inventory/TankCreationForm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTanks } from "@/lib/hooks";
+import { Loader2 } from "lucide-react";
+import { mutate } from "swr";
 
 // Mock Data for Tanks
 // 5000G Tanks: LAD-1, LAD-2, LAD-3, LAD-4
@@ -26,38 +30,7 @@ export const TANKS_CONFIG = [
     { id: "LP92-2", name: "LP92-2", product: "Petrol 92", current: 6000, max: 13638.27, color: "yellow" as const, type: "3000G" as const },
 ];
 
-// Helper function to generate mock historical inventory based on date
-function getHistoricalInventory(selectedDate: string) {
-    const today = new Date().toISOString().split("T")[0];
-    const selected = new Date(selectedDate);
-    const todayDate = new Date(today);
-    const daysDiff = Math.floor((todayDate.getTime() - selected.getTime()) / (1000 * 60 * 60 * 24));
-
-    // If viewing today, return current values
-    if (daysDiff <= 0) {
-        return TANKS_CONFIG;
-    }
-
-    // Generate "historical" values by adding simulated daily sales (randomized but consistent per date)
-    const seed = selected.getTime();
-    const pseudoRandom = (index: number) => {
-        const x = Math.sin(seed + index * 1000) * 10000;
-        return x - Math.floor(x);
-    };
-
-    return TANKS_CONFIG.map((tank, index) => {
-        // Daily consumption range: 500-1500L per day per tank (varies by tank)
-        const dailySale = 500 + pseudoRandom(index) * 1000;
-        // Historical = current + sales since then (past had more stock)
-        const historicalCurrent = Math.min(
-            tank.max * 0.95, // Cap at 95% of max
-            tank.current + (dailySale * daysDiff)
-        );
-        return { ...tank, current: Math.round(historicalCurrent) };
-    });
-}
-
-export default function InventoryPage() {
+function InventoryContent() {
     const searchParams = useSearchParams();
     const tabParam = searchParams.get("tab");
     const validTabs = ["reading", "return", "orders"];
@@ -71,8 +44,79 @@ export default function InventoryPage() {
         new Date().toISOString().split("T")[0]
     );
 
-    // Get historical tank data based on selected date
-    const historicalTanks = getHistoricalInventory(tanksDate);
+    // Fetch real tank data from API for the selected date
+    const { data: apiTanks, error: tanksError, isLoading: tanksLoading, mutate: mutateTanks } = useTanks(
+        tanksDate === new Date().toISOString().split("T")[0] ? null : tanksDate, // null for today means use latest
+        {
+            revalidateOnFocus: false,
+            refreshInterval: 60000, // Refresh every 60 seconds instead of constant refetching
+        }
+    );
+
+    // Fetch tank data for summary section (can be different date)
+    const { data: summaryTanksApi } = useTanks(
+        summaryDate === new Date().toISOString().split("T")[0] ? null : summaryDate,
+        {
+            revalidateOnFocus: false,
+        }
+    );
+
+    // Callback to refresh tanks after saving a reading
+    const handleReadingSaved = () => {
+        mutateTanks(); // Revalidate tanks data from API
+    };
+
+    // Map API data to the format expected by components, fallback to mock data (if enabled)
+    const tanksData = useMemo(() => {
+        if (apiTanks && apiTanks.length > 0) {
+            // Map API TankWithLevel to component format
+            return apiTanks.map(tank => ({
+                id: tank.id,  // Use actual UUID for API calls
+                name: tank.name,
+                product: tank.product_name || "Unknown",
+                current: Number(tank.current_volume) || 0,  // Ensure number
+                max: Number(tank.capacity_liters) || 0,      // Ensure number
+                color: (tank.color || "blue") as "white" | "red" | "blue" | "yellow",
+                type: tank.tank_type as "3000G" | "5000G" || "3000G",
+            }));
+        }
+        // Fallback to mock data for development (only if DISABLE_MOCK_DATA is false)
+        if (process.env.NEXT_PUBLIC_DISABLE_MOCK_DATA === 'true') {
+            return []; // Return empty array when mock data is disabled
+        }
+        return TANKS_CONFIG;
+    }, [apiTanks]);
+
+    // Map summary API data to component format (for summary section)
+    const summaryTanksData = useMemo(() => {
+        const tanks = summaryTanksApi || apiTanks;
+        if (tanks && tanks.length > 0) {
+            return tanks.map(tank => ({
+                id: tank.id,
+                name: tank.name,
+                product: tank.product_name || "Unknown",
+                current: Number(tank.current_volume) || 0,
+                max: Number(tank.capacity_liters) || 0,
+                color: (tank.color || "blue") as "white" | "red" | "blue" | "yellow",
+                type: tank.tank_type as "3000G" | "5000G" || "3000G",
+            }));
+        }
+        if (process.env.NEXT_PUBLIC_DISABLE_MOCK_DATA === 'true') {
+            return [];
+        }
+        return TANKS_CONFIG;
+    }, [summaryTanksApi, apiTanks]);
+
+    // Loading state
+    if (tanksLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="mt-2 text-muted-foreground">Loading inventory data...</p>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col gap-6 p-6 bg-background min-h-screen">
             <div className="flex items-center justify-between">
@@ -86,15 +130,18 @@ export default function InventoryPage() {
             <section className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold">Tank Levels</h3>
-                    <Input
-                        type="date"
-                        value={tanksDate}
-                        onChange={(e) => setTanksDate(e.target.value)}
-                        className="w-auto text-sm"
-                    />
+                    <div className="flex items-center gap-3">
+                        <TankCreationForm onTankCreated={() => mutate('/inventory/tanks')} />
+                        <Input
+                            type="date"
+                            value={tanksDate}
+                            onChange={(e) => setTanksDate(e.target.value)}
+                            className="w-auto text-sm"
+                        />
+                    </div>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    {historicalTanks.map((tank, index) => (
+                    {tanksData.map((tank, index) => (
                         <TankLevelCard
                             key={tank.id}
                             tankName={tank.name}
@@ -123,23 +170,24 @@ export default function InventoryPage() {
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     {(() => {
-                        // Get inventory data for the selected date
-                        const historicalTanks = getHistoricalInventory(summaryDate);
+                        // Use summary tanks data (from API for selected date)
+                        const summaryTanks = summaryTanksData;
 
-                        const totals = historicalTanks.reduce((acc, tank) => {
-                            if (tank.id.startsWith("LSD")) {
+                        const totals = summaryTanks.reduce((acc: { LSD: { current: number; max: number }; LAD: { current: number; max: number }; LP95: { current: number; max: number }; LP92: { current: number; max: number } }, tank) => {
+                            // Use tank.name for grouping since tank.id is now UUID
+                            if (tank.name.startsWith("LSD")) {
                                 acc.LSD.current += tank.current;
                                 acc.LSD.max += tank.max;
                             }
-                            if (tank.id.startsWith("LAD")) {
+                            if (tank.name.startsWith("LAD")) {
                                 acc.LAD.current += tank.current;
                                 acc.LAD.max += tank.max;
                             }
-                            if (tank.id.startsWith("LP95")) {
+                            if (tank.name.startsWith("LP95")) {
                                 acc.LP95.current += tank.current;
                                 acc.LP95.max += tank.max;
                             }
-                            if (tank.id.startsWith("LP92")) {
+                            if (tank.name.startsWith("LP92")) {
                                 acc.LP92.current += tank.current;
                                 acc.LP92.max += tank.max;
                             }
@@ -157,8 +205,8 @@ export default function InventoryPage() {
                                 fullName: "Super Diesel",
                                 data: totals.LSD,
                                 gradient: "from-slate-400 to-slate-600",
-                                bgGradient: "from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-900/80",
-                                progressBg: "bg-slate-200 dark:bg-slate-700",
+                                bgGradient: "from-slate-50 to-slate-100",
+                                progressBg: "bg-slate-200",
                                 progressFill: "bg-gradient-to-r from-slate-400 to-slate-600",
                             },
                             {
@@ -166,8 +214,8 @@ export default function InventoryPage() {
                                 fullName: "Petrol 95",
                                 data: totals.LP95,
                                 gradient: "from-rose-500 to-pink-600",
-                                bgGradient: "from-rose-50 to-pink-50 dark:from-rose-900/30 dark:to-pink-900/30",
-                                progressBg: "bg-rose-100 dark:bg-rose-900/50",
+                                bgGradient: "from-rose-50 to-pink-50",
+                                progressBg: "bg-rose-100",
                                 progressFill: "bg-gradient-to-r from-rose-500 to-pink-600",
                             },
                             {
@@ -175,8 +223,8 @@ export default function InventoryPage() {
                                 fullName: "Auto Diesel",
                                 data: totals.LAD,
                                 gradient: "from-sky-500 to-blue-600",
-                                bgGradient: "from-sky-50 to-blue-50 dark:from-sky-900/30 dark:to-blue-900/30",
-                                progressBg: "bg-sky-100 dark:bg-sky-900/50",
+                                bgGradient: "from-sky-50 to-blue-50",
+                                progressBg: "bg-sky-100",
                                 progressFill: "bg-gradient-to-r from-sky-500 to-blue-600",
                             },
                             {
@@ -184,8 +232,8 @@ export default function InventoryPage() {
                                 fullName: "Petrol 92",
                                 data: totals.LP92,
                                 gradient: "from-amber-400 to-orange-500",
-                                bgGradient: "from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30",
-                                progressBg: "bg-amber-100 dark:bg-amber-900/50",
+                                bgGradient: "from-amber-50 to-orange-50",
+                                progressBg: "bg-amber-100",
                                 progressFill: "bg-gradient-to-r from-amber-400 to-orange-500",
                             },
                         ];
@@ -197,7 +245,7 @@ export default function InventoryPage() {
                             return (
                                 <div
                                     key={item.label}
-                                    className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${item.bgGradient} p-4 border border-white/20 dark:border-white/10 transition-all duration-300 hover:shadow-lg`}
+                                    className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${item.bgGradient} p-4 border border-white/20 transition-all duration-300 hover:shadow-lg`}
                                 >
                                     {/* Header */}
                                     <div className="flex items-center justify-between mb-3">
@@ -254,7 +302,7 @@ export default function InventoryPage() {
                     </div>
 
                     <TabsContent value="reading" className="border-none p-0 outline-none space-y-6">
-                        <DailyReadingForm tanks={TANKS_CONFIG} />
+                        <DailyReadingForm tanks={tanksData} onSaveSuccess={handleReadingSaved} />
 
                         {/* History Section - only visible in Daily Reading tab */}
                         <div className="space-y-4">
@@ -285,5 +333,17 @@ export default function InventoryPage() {
                 </Tabs>
             </section>
         </div>
+    );
+}
+
+export default function InventoryPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-[50vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        }>
+            <InventoryContent />
+        </Suspense>
     );
 }
