@@ -74,6 +74,7 @@ export interface Nozzle {
     pump_name?: string;
     tank_name?: string;
     product_name?: string;
+    price_per_liter?: number; // From joined product data
 }
 
 export interface TankCreate {
@@ -308,43 +309,7 @@ export interface AdvancePayment {
     created_at: string;
 }
 
-// ============================================================================
-// Orders Types
-// ============================================================================
 
-export interface FuelOrderCreate {
-    product_id: UUID;
-    order_number?: string | null;
-    liters_ordered: number;
-    supplier: string;
-    expected_date?: string | null;
-    notes?: string | null;
-    placed_at?: string | null;
-}
-
-export interface FuelOrder {
-    id: UUID;
-    station_id: UUID;
-    product_id: UUID;
-    order_number: string | null;
-    liters_ordered: number;
-    supplier: string;
-    status: OrderStatus;
-    placed_at: string;
-    expected_date: string | null;
-    received_at: string | null;
-    payment_made: boolean;
-    notes: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface FuelOrderUpdate {
-    status?: OrderStatus;
-    received_at?: string | null;
-    payment_made?: boolean;
-    notes?: string | null;
-}
 
 // ============================================================================
 // User Types
@@ -456,6 +421,29 @@ export interface Sale {
     is_submitted: boolean;
     notes: string | null;
     created_at: string;
+    // Optional nested card and credit sales
+    card_sales?: CardSaleResponse[] | null;
+    credit_sales?: CreditSaleResponse[] | null;
+}
+
+// Response types for nested sale entries (includes id from database)
+export interface CardSaleResponse {
+    id: UUID;
+    terminal_id: UUID;
+    amount: number;
+    batch_number: string | null;
+    invoice_number: string | null;
+    invoice_datetime: string | null;
+}
+
+export interface CreditSaleResponse {
+    id: UUID;
+    account_id: UUID;
+    amount: number;
+    liters: number | null;
+    po_number: string | null;
+    vehicle_number: string | null;
+    notes: string | null;
 }
 
 export interface ShiftSummary {
@@ -810,8 +798,6 @@ export const EXPENSE_CATEGORIES = [
 // Fuel Order Types
 // ============================================================================
 
-export type OrderStatus = 'pending' | 'delivered' | 'cancelled';
-
 export interface FuelOrder {
     id: UUID;
     station_id: UUID;
@@ -842,10 +828,10 @@ export interface FuelOrderCreate {
 }
 
 export interface FuelOrderUpdate {
-    status?: OrderStatus | null;
-    received_at?: string | null;
-    payment_made?: boolean | null;
-    notes?: string | null;
+    status?: OrderStatus;
+    received_at?: string;
+    payment_made?: boolean;
+    notes?: string;
 }
 
 // ============================================================================
