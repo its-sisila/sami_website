@@ -44,6 +44,6 @@ class AuditLog(Base):
     entity_type: Mapped[str | None] = mapped_column(String(100))
     entity_id: Mapped[UUID | None] = mapped_column()
     details: Mapped[dict | None] = mapped_column(JSONB)
-    ip_address: Mapped[str | None] = mapped_column(String(50))  # Simplified from INET
+    ip_address: Mapped[str | None] = mapped_column(INET)  # PostgreSQL INET type
     user_agent: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
