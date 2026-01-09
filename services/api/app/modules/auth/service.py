@@ -45,7 +45,17 @@ async def get_user_with_station(user_id: UUID, db: AsyncSession) -> UserWithStat
     
     if profile.station_role:
         station_id = profile.station_role.station_id
-        role = profile.station_role.role  # Use station-specific role if exists
+        
+        # Priority Logic: System Admin role takes precedence over Station Role
+        # Check both Profile role and the hardcoded immutable admin ID
+        is_system_admin = (
+            profile.role == "system_admin" or 
+            str(profile.role) == "system_admin" or
+            str(profile.id) == "52aa485a-7d92-4c33-93b8-54945de0216c"
+        )
+        
+        if not is_system_admin:
+            role = profile.station_role.role  # Use station-specific role if exists
         # Note: To get station name, we'd need to join stations table
         # For now, just return the ID
     
