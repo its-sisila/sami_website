@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
     
     @property
     def async_database_url(self) -> str:
