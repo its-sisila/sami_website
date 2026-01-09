@@ -51,3 +51,24 @@ class AuditLogRead(BaseModel):
     created_at: datetime
     
     model_config = {"from_attributes": True}
+
+
+# ============================================================================
+# Station Admin Schemas
+# ============================================================================
+
+class StationCreateAdmin(BaseModel):
+    """Schema for admin creating a new station with owner."""
+    name: str
+    owner_email: str
+    address: str | None = None
+    phone: str | None = None
+
+
+class StationUpdateAdmin(BaseModel):
+    """Schema for admin updating station details."""
+    name: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    status: str | None = None
