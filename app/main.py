@@ -9,13 +9,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-
+from app.core.database import engine, Base
+# Ensure models are imported so they are registered with Base
+from app.modules.accounts.models import BankAccount
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     print(f"Starting {settings.app_name}...")
+    
+    # Create tables if they don't exist (dev mode convenience)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        
     yield
     # Shutdown
     print(f"Shutting down {settings.app_name}...")
@@ -36,6 +43,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Global exception handler to ensure CORS headers in error responses
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled exceptions and return proper JSON with CORS headers."""
+    # Log the error for debugging
+    print(f"Unhandled exception in {request.method} {request.url.path}:")
+    print(traceback.format_exc())
+    
+    # Return a proper JSON response (CORS headers will be added by middleware)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"},
+    )
+
+
+
 
 
 @app.get("/")
