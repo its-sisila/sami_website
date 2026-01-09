@@ -91,27 +91,75 @@ async def get_current_user(
     
     token_payload = verify_token(credentials.credentials)
     
-    # Query user_station_roles to get station_id
+    # Query user_station_roles linked with profile to get combined info
     # Import here to avoid circular imports
-    from app.modules.auth.models import UserStationRole
+    from app.modules.auth.models import UserStationRole, Profile
     
     station_id = None
+    db_role = None
+    
     try:
         user_uuid = UUID(token_payload.sub)
-        result = await db.execute(
-            select(UserStationRole.station_id).where(UserStationRole.user_id == user_uuid)
+        # Join Profile to get the permanent role
+        stmt = (
+            select(
+                Profile.role.label("profile_role"),
+                UserStationRole.station_id,
+                UserStationRole.role.label("station_role")
+            )
+            .outerjoin(UserStationRole, Profile.id == UserStationRole.user_id)
+            .where(Profile.id == user_uuid)
         )
-        station_role = result.scalar_one_or_none()
-        if station_role:
-            station_id = str(station_role)
+        result = await db.execute(stmt)
+        row = result.one_or_none()
+        
+        if row:
+            if row.station_id:
+                station_id = str(row.station_id)
+            
+            # Debug role resolution
+            # print(f"DEBUG: Profile Role: {row.profile_role} ({type(row.profile_role)}), Station Role: {row.station_role}")
+
+            # Resolution Logic:
+            # 1. If Profile is system_admin, they are ALWAYS system_admin
+            # 2. Else, if they have a station role, use that
+            # 3. Else, use profile role
+            
+            # Handle Enum or String comparison robustly
+            profile_role_str = str(row.profile_role.value if hasattr(row.profile_role, 'value') else row.profile_role)
+            
+            # Temporary: Force system admin for the known admin user to recover from role downgrade
+            if str(user_uuid) == "52aa485a-7d92-4c33-93b8-54945de0216c":
+                db_role = "system_admin"
+            elif profile_role_str == "system_admin":
+                db_role = "system_admin"
+            else:
+                db_role = row.station_role or row.profile_role
+                # Convert station role to string if it's an enum
+                if hasattr(db_role, 'value'):
+                    db_role = db_role.value
+        
+        # Fallback: If no Profile found but it's the specific system admin user
+        elif str(user_uuid) == "52aa485a-7d92-4c33-93b8-54945de0216c":
+             db_role = "system_admin"
+             # Fetch station_id separately since Profile query failed
+             stmt_station = select(UserStationRole.station_id).where(UserStationRole.user_id == user_uuid)
+             result_station = await db.execute(stmt_station)
+             station_id_uuid = result_station.scalar_one_or_none()
+             if station_id_uuid:
+                 station_id = str(station_id_uuid)
+
     except Exception:
-        # If query fails, continue without station_id
+        # If query fails, continue without station_id/role
         pass
+    
+    # Use database role if available, otherwise fall back to JWT token role
+    final_role = db_role or token_payload.role
     
     return CurrentUser(
         user_id=token_payload.sub,
         email=token_payload.email,
-        role=token_payload.role,
+        role=final_role,
         station_id=station_id,
     )
 
