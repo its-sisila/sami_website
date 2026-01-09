@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user, CurrentUser
 from app.modules.admin import service
-from app.modules.admin.schemas import SupportAccessToggle, SupportAccessRead, AuditLogRead
+from app.modules.admin.schemas import SupportAccessToggle, SupportAccessRead, AuditLogRead, StationCreateAdmin, StationUpdateAdmin
 from app.modules.stations.schemas import StationRead
 
 
@@ -26,7 +26,7 @@ def require_system_admin(user: CurrentUser):
     if user.role != "system_admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="System admin access required",
+            detail=f"System admin access required. Got role: {user.role}",
         )
 
 
@@ -43,6 +43,79 @@ async def list_stations(
     require_system_admin(current_user)
     stations = await service.list_all_stations(db)
     return stations
+
+
+@router.post("/stations", response_model=StationRead, status_code=status.HTTP_201_CREATED)
+async def create_station(
+    data: StationCreateAdmin,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Create a new station. Requires system admin role."""
+    require_system_admin(current_user)
+    
+    station = await service.create_station(
+        db=db,
+        name=data.name,
+        owner_email=data.owner_email,
+        address=data.address,
+        phone=data.phone,
+    )
+    
+    # Log the action
+    await service.log_audit(
+        db=db,
+        actor_id=UUID(current_user.user_id),
+        action="station.create",
+        station_id=station.id,
+        entity_type="station",
+        entity_id=station.id,
+        details={"name": data.name, "owner_email": data.owner_email},
+    )
+    
+    await db.commit()
+    return station
+
+
+@router.patch("/stations/{station_id}", response_model=StationRead)
+async def update_station(
+    station_id: UUID,
+    data: StationUpdateAdmin,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Update station details. Requires system admin role."""
+    require_system_admin(current_user)
+    
+    station = await service.update_station(
+        db=db,
+        station_id=station_id,
+        name=data.name,
+        address=data.address,
+        phone=data.phone,
+        email=data.email,
+        status=data.status,
+    )
+    
+    if not station:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Station not found",
+        )
+    
+    # Log the action
+    await service.log_audit(
+        db=db,
+        actor_id=UUID(current_user.user_id),
+        action="station.update",
+        station_id=station.id,
+        entity_type="station",
+        entity_id=station.id,
+        details={"updates": data.model_dump(exclude_unset=True)},
+    )
+    
+    await db.commit()
+    return station
 
 
 # ============================================================================
