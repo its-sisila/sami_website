@@ -75,6 +75,68 @@ async def list_all_stations(db: AsyncSession) -> list[Station]:
     return list(result.scalars().all())
 
 
+async def create_station(
+    db: AsyncSession,
+    name: str,
+    owner_email: str,
+    address: str | None = None,
+    phone: str | None = None,
+) -> Station:
+    """
+    Create a new station (system admin only).
+    
+    This creates the station record. Owner user creation/invite 
+    should be handled separately through the users module.
+    """
+    station = Station(
+        id=uuid4(),
+        name=name,
+        address=address,
+        phone=phone,
+        email=owner_email,  # Store owner email in station
+        status="setup",
+    )
+    db.add(station)
+    await db.flush()
+    await db.refresh(station)
+    return station
+
+
+async def update_station(
+    db: AsyncSession,
+    station_id: UUID,
+    name: str | None = None,
+    address: str | None = None,
+    phone: str | None = None,
+    email: str | None = None,
+    status: str | None = None,
+) -> Station | None:
+    """
+    Update station details (system admin only).
+    """
+    stmt = select(Station).where(Station.id == station_id)
+    result = await db.execute(stmt)
+    station = result.scalar_one_or_none()
+    
+    if not station:
+        return None
+    
+    if name is not None:
+        station.name = name
+    if address is not None:
+        station.address = address
+    if phone is not None:
+        station.phone = phone
+    if email is not None:
+        station.email = email
+    if status is not None:
+        station.status = status
+    
+    await db.flush()
+    await db.refresh(station)
+    return station
+
+
 # ============================================================================
 # Support Access
 # ============================================================================
