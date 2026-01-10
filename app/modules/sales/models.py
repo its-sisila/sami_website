@@ -54,8 +54,6 @@ class Shift(Base):
     
     # Relationships
     sales: Mapped[list["Sale"]] = relationship("Sale", back_populates="shift")
-    card_sales: Mapped[list["CardSale"]] = relationship("CardSale", back_populates="shift")
-    credit_sales: Mapped[list["CreditSale"]] = relationship("CreditSale", back_populates="shift")
 
 
 class Sale(Base):
@@ -65,7 +63,7 @@ class Sale(Base):
     
     id: Mapped[UUID] = mapped_column(primary_key=True)
     shift_id: Mapped[UUID] = mapped_column(ForeignKey("shifts.id", ondelete="CASCADE"))
-    nozzle_id: Mapped[UUID] = mapped_column(ForeignKey("nozzles.id", ondelete="RESTRICT"))
+    nozzle_id: Mapped[str] = mapped_column(String(50), ForeignKey("nozzles.nozzle_id", ondelete="RESTRICT"))
     employee_id: Mapped[UUID | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
     start_meter_digital: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     end_meter_digital: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
@@ -85,27 +83,6 @@ class Sale(Base):
     credit_sales: Mapped[list["CreditSale"]] = relationship("CreditSale", back_populates="sale")
 
 
-class ShiftAssignment(Base):
-    """Pre-scheduled employee assignments for upcoming shifts."""
-    
-    __tablename__ = "shift_assignments"
-    
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    station_id: Mapped[UUID] = mapped_column(ForeignKey("stations.id", ondelete="CASCADE"))
-    shift_date: Mapped[date] = mapped_column(Date, nullable=False)
-    shift_type: Mapped[ShiftType] = mapped_column(
-        SQLEnum(ShiftType, name="shift_type", create_type=False)
-    )
-    employee_id: Mapped[UUID] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
-    assigned_by: Mapped[UUID | None] = mapped_column(ForeignKey("profiles.id"))
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    
-    __table_args__ = (
-        # One assignment per employee per shift date/type
-        {"sqlite_autoincrement": True},
-    )
-
-
 class CardSale(Base):
     """Card sales recorded per nozzle per shift."""
     
@@ -114,17 +91,17 @@ class CardSale(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True)
     shift_id: Mapped[UUID] = mapped_column(ForeignKey("shifts.id", ondelete="CASCADE"))
     sale_id: Mapped[UUID | None] = mapped_column(ForeignKey("sales.id", ondelete="SET NULL"))
-    nozzle_id: Mapped[UUID | None] = mapped_column(ForeignKey("nozzles.id", ondelete="RESTRICT"))
+    nozzle_id: Mapped[str | None] = mapped_column(String(50), ForeignKey("nozzles.nozzle_id", ondelete="RESTRICT"))
     terminal_id: Mapped[UUID] = mapped_column(ForeignKey("card_terminals.id", ondelete="RESTRICT"))
     batch_number: Mapped[str | None] = mapped_column(String(100))
     settlement_datetime: Mapped[datetime | None] = mapped_column()
+    invoice_number: Mapped[str | None] = mapped_column(String(100))
+    invoice_datetime: Mapped[datetime | None] = mapped_column()
     amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
-    notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    shift: Mapped["Shift"] = relationship("Shift", back_populates="card_sales")
     sale: Mapped["Sale"] = relationship("Sale", back_populates="card_sales")
 
 
@@ -136,7 +113,7 @@ class CreditSale(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True)
     shift_id: Mapped[UUID] = mapped_column(ForeignKey("shifts.id", ondelete="CASCADE"))
     sale_id: Mapped[UUID | None] = mapped_column(ForeignKey("sales.id", ondelete="SET NULL"))
-    nozzle_id: Mapped[UUID | None] = mapped_column(ForeignKey("nozzles.id", ondelete="RESTRICT"))
+    nozzle_id: Mapped[str | None] = mapped_column(String(50), ForeignKey("nozzles.nozzle_id", ondelete="RESTRICT"))
     account_id: Mapped[UUID] = mapped_column(ForeignKey("company_accounts.id", ondelete="RESTRICT"))
     po_number: Mapped[str | None] = mapped_column(String(100))
     vehicle_number: Mapped[str | None] = mapped_column(String(50))
@@ -147,6 +124,5 @@ class CreditSale(Base):
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    shift: Mapped["Shift"] = relationship("Shift", back_populates="credit_sales")
     sale: Mapped["Sale"] = relationship("Sale", back_populates="credit_sales")
 
