@@ -345,7 +345,7 @@ async def create_nozzle(
 
 @router.put("/nozzles/{nozzle_id}", response_model=NozzleRead)
 async def update_nozzle(
-    nozzle_id: UUID,
+    nozzle_id: str,
     data: NozzleCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -365,7 +365,7 @@ async def update_nozzle(
 
 @router.delete("/nozzles/{nozzle_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_nozzle(
-    nozzle_id: UUID,
+    nozzle_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
