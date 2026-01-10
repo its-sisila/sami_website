@@ -19,7 +19,13 @@ from app.modules.sales.schemas import (
     ShiftStart, ShiftEnd, ShiftRead, ShiftSummary,
     SaleEntryCreate, SaleRead, WeeklySalesStat,
     ShiftCompletePayload,
+    TankSalesResponse,
+    SalesHistoryResponse,
+    ReconciliationStats,
+    DailySalesSummary,
 )
+from app.modules.sales.models import ShiftType
+from datetime import date as DateType
 
 
 router = APIRouter()
@@ -84,6 +90,45 @@ async def get_current_shift(
     shift = await service.get_current_shift(station_id, db)
     return shift
 
+
+@router.get("/shifts/latest", response_model=ShiftRead | None)
+async def get_latest_shift(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get the most recently closed shift for dashboard fallback."""
+    if not current_user.station_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not assigned to a station",
+        )
+    
+    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    shift = await service.get_latest_closed_shift(station_id, db)
+    return shift
+
+
+
+@router.get("/tank-sales", response_model=TankSalesResponse)
+async def get_tank_sales(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tank_id: str = Query(..., description="Tank name/ID like 'LSD-1'"),
+    sales_date: DateType = Query(..., description="Date for sales"),
+):
+    """
+    Get aggregated nozzle sales for a tank on a specific date.
+    Returns day and night shift totals for each nozzle connected to the tank.
+    """
+    if not current_user.station_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not assigned to a station",
+        )
+    
+    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    result = await service.get_tank_sales(tank_id, sales_date, station_id, db)
+    return result
 
 @router.get("/shifts/{shift_id}", response_model=ShiftSummary)
 async def get_shift_summary(
@@ -195,92 +240,6 @@ async def complete_shift(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# ============================================================================
-# Shift Scheduling
-# ============================================================================
-
-from datetime import date as DateType
-from app.modules.sales.schemas import (
-    ShiftAssignmentCreate, ShiftAssignmentRead, ScheduledEmployeesResponse
-)
-from app.modules.sales.models import ShiftType
-
-
-@router.get("/shifts/schedule", response_model=ScheduledEmployeesResponse)
-async def get_scheduled_employees(
-    current_user: Annotated[CurrentUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    shift_date: DateType = Query(..., description="Date for the shift"),
-    shift_type: ShiftType = Query(..., description="day or night"),
-):
-    """Get employees scheduled for a specific shift."""
-    if not current_user.station_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is not assigned to a station",
-        )
-    
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
-    employee_ids = await service.get_scheduled_employees(station_id, shift_date, shift_type, db)
-    
-    return ScheduledEmployeesResponse(
-        shift_date=shift_date,
-        shift_type=shift_type,
-        employee_ids=employee_ids,
-    )
-
-
-@router.post("/shifts/schedule", response_model=ShiftAssignmentRead, status_code=status.HTTP_201_CREATED)
-async def schedule_employee(
-    data: ShiftAssignmentCreate,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    """Assign an employee to a shift."""
-    if not current_user.station_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is not assigned to a station",
-        )
-    
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
-    assigned_by = UUID(current_user.user_id) if current_user.user_id else None
-    
-    assignment = await service.schedule_employee(
-        station_id,
-        data.shift_date,
-        data.shift_type,
-        data.employee_id,
-        assigned_by,
-        db
-    )
-    return assignment
-
-
-@router.delete("/shifts/schedule", status_code=status.HTTP_204_NO_CONTENT)
-async def unschedule_employee(
-    current_user: Annotated[CurrentUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    shift_date: DateType = Query(..., description="Date for the shift"),
-    shift_type: ShiftType = Query(..., description="day or night"),
-    employee_id: UUID = Query(..., description="Employee to remove"),
-):
-    """Remove an employee from a shift schedule."""
-    if not current_user.station_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is not assigned to a station",
-        )
-    
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
-    removed = await service.unschedule_employee(station_id, shift_date, shift_type, employee_id, db)
-    
-    if not removed:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    
-
-    
-    return None
 
 
 @router.get("/chart/weekly", response_model=list[WeeklySalesStat])
@@ -299,4 +258,80 @@ async def get_weekly_sales_chart(
     
     station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     stats = await service.get_weekly_sales(station_id, start_date, end_date, db)
+    return stats
+
+
+@router.get("/daily-summary", response_model=DailySalesSummary)
+async def get_daily_sales_summary(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date: DateType = Query(..., description="Date for summary (YYYY-MM-DD)"),
+):
+    """Get sales summary for a specific date with day/night breakdown."""
+    if not current_user.station_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not assigned to a station",
+        )
+    
+    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    summary = await service.get_daily_sales_summary(station_id, date, db)
+    return summary
+
+
+# ============================================================================
+# Sales History
+# ============================================================================
+
+@router.get("/history", response_model=SalesHistoryResponse)
+async def get_sales_history(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(50, ge=1, le=200, description="Number of records to return"),
+    offset: int = Query(0, ge=0, description="Number of records to skip"),
+    start_date: DateType | None = Query(None, description="Filter by start date"),
+    end_date: DateType | None = Query(None, description="Filter by end date"),
+    nozzle_id: str | None = Query(None, description="Filter by nozzle ID"),
+    product_code: str | None = Query(None, description="Filter by product code"),
+):
+    """
+    Get paginated sales history for the station.
+    
+    Returns sales records with shift date, nozzle details, product info,
+    and card/credit sales breakdown.
+    """
+    if not current_user.station_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not assigned to a station",
+        )
+    
+    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    result = await service.get_sales_history(station_id, limit, offset, start_date, end_date, nozzle_id, product_code, db)
+    return result
+
+
+# ============================================================================
+# Reconciliation
+# ============================================================================
+
+@router.get("/reconciliation", response_model=ReconciliationStats)
+async def get_reconciliation_stats(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    target_date: DateType = Query(..., alias="date", description="Target date"),
+    range_type: str = Query(..., alias="range", description="Range type (Today, 7 Days, Month, Year, All Time)"),
+):
+    """
+    Get working capital reconciliation stats.
+    Calculates Expected Sales vs Verified Funds (Cash+Card) and Variance.
+    """
+    if not current_user.station_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not assigned to a station",
+        )
+    
+    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    stats = await service.get_reconciliation_stats(station_id, target_date, range_type, db)
     return stats
