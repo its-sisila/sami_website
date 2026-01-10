@@ -50,10 +50,25 @@ class ShiftRead(BaseModel):
 # Sale Entry Schemas
 # ============================================================================
 
+class SaleCardEntry(BaseModel):
+    terminal_id: UUID
+    amount: Decimal
+    batch_number: str | None = None
+    invoice_number: str | None = None
+    invoice_datetime: datetime | None = None
+
+class SaleCreditEntry(BaseModel):
+    account_id: UUID
+    amount: Decimal
+    liters: Decimal | None = None
+    po_number: str | None = None
+    vehicle_number: str | None = None
+    notes: str | None = None
+
 class SaleEntryCreate(BaseModel):
     """Schema for recording nozzle meter readings."""
-    shift_id: UUID
-    nozzle_id: UUID
+    shift_id: UUID | None = None  # Optional - can be provided via URL path in complete_shift
+    nozzle_id: str  # VARCHAR nozzle ID like "LAD-1"
     employee_id: UUID | None = None  # Pumper assigned
     start_meter_digital: Decimal
     end_meter_digital: Decimal
@@ -61,13 +76,35 @@ class SaleEntryCreate(BaseModel):
     end_meter_analog: Decimal | None = None
     price_per_liter: Decimal
     notes: str | None = None
+    
+    # Optional nested entries to save with the sale
+    card_entries: list[SaleCardEntry] | None = None
+    credit_entries: list[SaleCreditEntry] | None = None
 
+
+class CardSaleRead(BaseModel):
+    id: UUID
+    terminal_id: UUID
+    amount: Decimal
+    batch_number: str | None = None
+    invoice_number: str | None = None
+    invoice_datetime: datetime | None = None
+    model_config = {"from_attributes": True}
+
+class CreditSaleRead(BaseModel):
+    id: UUID
+    account_id: UUID
+    amount: Decimal
+    liters: Decimal | None = None
+    po_number: str | None = None
+    vehicle_number: str | None = None
+    model_config = {"from_attributes": True}
 
 class SaleRead(BaseModel):
     """Sale response schema - includes calculated fields."""
     id: UUID
     shift_id: UUID
-    nozzle_id: UUID
+    nozzle_id: str  # VARCHAR nozzle ID like "LAD-1"
     employee_id: UUID | None = None
     start_meter_digital: Decimal
     end_meter_digital: Decimal
@@ -78,8 +115,11 @@ class SaleRead(BaseModel):
     amount_lkr: Decimal
     is_submitted: bool
     notes: str | None = None
-    created_at: datetime
     
+    # Nested relations
+    card_sales: list[CardSaleRead] = []
+    credit_sales: list[CreditSaleRead] = []
+
     model_config = {"from_attributes": True}
 
 
@@ -124,9 +164,24 @@ class ScheduledEmployeesResponse(BaseModel):
 
 class WeeklySalesStat(BaseModel):
     """Weekly sales stats for chart."""
-    day: str  # Mon, Tue, etc.
-    dayShift: Decimal
-    nightShift: Decimal
+    date: date
+    name: str # Label "Mon" or "Oct 24"
+    totalSalesAmount: Decimal
+    verifiedFunds: Decimal
+
+
+class DailySalesSummary(BaseModel):
+    """Daily sales summary for dashboard."""
+    date: date
+    day_shift_sales: Decimal
+    day_shift_liters: Decimal
+    day_shift_count: int
+    night_shift_sales: Decimal
+    night_shift_liters: Decimal
+    night_shift_count: int
+    total_sales: Decimal
+    total_liters: Decimal
+    total_count: int
 
 
 # ============================================================================
@@ -136,12 +191,11 @@ class WeeklySalesStat(BaseModel):
 class CardSaleCreate(BaseModel):
     """Schema for creating a card sale entry."""
     sale_id: UUID | None = None  # Optional: links to specific nozzle sale
-    nozzle_id: UUID | None = None  # Optional - can be global or per-nozzle
+    nozzle_id: str | None = None  # Optional - can be global or per-nozzle (VARCHAR like 'N-LP95-1')
     terminal_id: UUID
     batch_number: str | None = None
     settlement_datetime: datetime | None = None
     amount: Decimal
-    notes: str | None = None
 
 
 class CardSaleRead(BaseModel):
@@ -167,7 +221,7 @@ class CardSaleRead(BaseModel):
 class CreditSaleCreate(BaseModel):
     """Schema for creating a credit sale entry."""
     sale_id: UUID | None = None  # Optional: links to specific nozzle sale
-    nozzle_id: UUID | None = None  # Optional - can be global or per-nozzle
+    nozzle_id: str | None = None  # Optional - can be global or per-nozzle (VARCHAR like 'N-LP95-1')
     account_id: UUID  # Company account
     po_number: str | None = None
     vehicle_number: str | None = None
@@ -204,4 +258,76 @@ class ShiftCompletePayload(BaseModel):
     card_sales: list[CardSaleCreate] = []
     credit_sales: list[CreditSaleCreate] = []
     notes: str | None = None
+
+
+# ============================================================================
+# Tank Sales Aggregation Schemas
+# ============================================================================
+
+class TankNozzleSales(BaseModel):
+    """Sales for a single nozzle in day/night shifts."""
+    nozzle_id: str
+    nozzle_name: str
+    day_liters: Decimal
+    night_liters: Decimal
+
+
+class TankSalesResponse(BaseModel):
+    """Aggregated nozzle sales for a tank on a specific date."""
+    tank_id: str
+    tank_name: str
+    date: date
+    nozzles: list[TankNozzleSales]
+    total_liters: Decimal
+
+
+# ============================================================================
+# Sales History Schemas
+# ============================================================================
+
+class SalesHistoryItem(BaseModel):
+    """Schema for a single sale in the sales history."""
+    id: UUID
+    shift_date: date
+    shift_type: ShiftType
+    nozzle_id: str
+    nozzle_name: str | None = None
+    product_name: str | None = None
+    product_code: str | None = None
+    employee_id: UUID | None = None
+    employee_name: str | None = None
+    liters_sold: Decimal
+    price_per_liter: Decimal
+    amount_lkr: Decimal
+    card_sales_total: Decimal = Decimal("0")
+    credit_sales_total: Decimal = Decimal("0")
+    cash_sales: Decimal = Decimal("0")  # amount - card - credit
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SalesHistoryResponse(BaseModel):
+    """Paginated response for sales history."""
+    items: list[SalesHistoryItem]
+    total: int
+    limit: int
+    offset: int
+
+
+# ============================================================================
+# Reconciliation Schemas
+# ============================================================================
+
+class ReconciliationShiftStats(BaseModel):
+    """Stats for a single shift type."""
+    expected_sales: Decimal
+    verified_funds: Decimal
+    variance: Decimal
+
+class ReconciliationStats(BaseModel):
+    """Working capital reconciliation stats."""
+    day_shift: ReconciliationShiftStats
+    night_shift: ReconciliationShiftStats
+    total: ReconciliationShiftStats
 
