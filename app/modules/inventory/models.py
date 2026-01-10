@@ -5,11 +5,11 @@ Maps to fuel_products, tanks, pumps, nozzles, tank_readings tables.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time as dt_time
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, Date, Numeric, Boolean, Text, JSON
+from sqlalchemy import ForeignKey, String, Date, Numeric, Boolean, Text, JSON, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -125,7 +125,7 @@ class FuelDelivery(Base):
     tank_id: Mapped[UUID] = mapped_column(ForeignKey("tanks.id", ondelete="RESTRICT"))
     liters_received: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     delivery_date: Mapped[date] = mapped_column(Date, default=date.today)
-    delivery_time: Mapped[str | None] = mapped_column(String(20))
+    delivery_time: Mapped[dt_time | None] = mapped_column(Time)
     delivery_slip_number: Mapped[str | None] = mapped_column(String(100))
     vehicle_number: Mapped[str | None] = mapped_column(String(50))
     driver_name: Mapped[str | None] = mapped_column(String(255))
