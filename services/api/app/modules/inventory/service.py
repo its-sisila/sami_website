@@ -271,12 +271,18 @@ async def submit_readings(
         result = await db.execute(stmt)
         existing = result.scalar_one_or_none()
         
+        # Prepare meter readings as JSON-serializable list of dicts
+        meter_readings_json = None
+        if entry.meter_readings:
+            meter_readings_json = [m.model_dump() for m in entry.meter_readings]
+
         if existing:
             # Update existing reading
             existing.height_cm = entry.height_cm
             existing.volume_liters = entry.volume_liters
             existing.staff_responsible_ids = staff_responsible
             existing.monitored_by_ids = monitored_by
+            existing.meter_readings = meter_readings_json
             created.append(existing)
         else:
             # Create new reading
@@ -290,6 +296,7 @@ async def submit_readings(
                 recorded_by=recorded_by,
                 staff_responsible_ids=staff_responsible,
                 monitored_by_ids=monitored_by,
+                meter_readings=meter_readings_json,
             )
             db.add(reading)
             created.append(reading)
@@ -460,8 +467,10 @@ async def list_nozzles(station_id: UUID, db: AsyncSession) -> list[NozzleRead]:
     nozzles = []
     for row in rows:
         nozzle = row[0]
+        # Convert UUID to string if needed (for backward compatibility with existing data)
+        nozzle_id_str = str(nozzle.nozzle_id) if hasattr(nozzle.nozzle_id, 'hex') else nozzle.nozzle_id
         nozzles.append(NozzleRead(
-            nozzle_id=nozzle.nozzle_id,
+            nozzle_id=nozzle_id_str,
             pump_id=nozzle.pump_id,
             tank_id=nozzle.tank_id,
             product_id=nozzle.product_id,
@@ -540,9 +549,9 @@ async def create_nozzle(
             await db.flush()
             pump_uuid = new_pump.id
     
-    # Create nozzle with nozzle_name
+    # Create nozzle with user-provided nozzle_id
     nozzle = Nozzle(
-        nozzle_id=uuid4(),
+        nozzle_id=data.nozzle_id,  # User-provided ID (e.g., N-LAD-1)
         pump_id=pump_uuid,
         tank_id=data.tank_id,
         product_id=data.product_id,
@@ -566,8 +575,10 @@ async def create_nozzle(
     result = await db.execute(stmt)
     row = result.one()
     
+    # Convert UUID to string if needed
+    nozzle_id_str = str(nozzle.nozzle_id) if hasattr(nozzle.nozzle_id, 'hex') else nozzle.nozzle_id
     return NozzleRead(
-        nozzle_id=nozzle.nozzle_id,
+        nozzle_id=nozzle_id_str,
         pump_id=nozzle.pump_id,
         tank_id=nozzle.tank_id,
         product_id=nozzle.product_id,
@@ -582,11 +593,12 @@ async def create_nozzle(
 
 async def update_nozzle(
     station_id: UUID,
-    nozzle_id: UUID,
+    nozzle_id: str,
     data: NozzleCreate,
     db: AsyncSession
 ) -> NozzleRead:
     """Update a nozzle."""
+    # nozzle_id is now VARCHAR in database, use directly as string
     stmt = (
         select(Nozzle)
         .join(Pump, Nozzle.pump_id == Pump.id)
@@ -661,8 +673,10 @@ async def update_nozzle(
     result = await db.execute(stmt)
     row = result.one()
     
+    # Convert UUID to string if needed
+    nozzle_id_str = str(nozzle.nozzle_id) if hasattr(nozzle.nozzle_id, 'hex') else nozzle.nozzle_id
     return NozzleRead(
-        nozzle_id=nozzle.nozzle_id,
+        nozzle_id=nozzle_id_str,
         pump_id=nozzle.pump_id,
         tank_id=nozzle.tank_id,
         product_id=nozzle.product_id,
@@ -675,9 +689,9 @@ async def update_nozzle(
     )
 
 
-async def delete_nozzle(station_id: UUID, nozzle_id: UUID, db: AsyncSession) -> None:
+async def delete_nozzle(station_id: UUID, nozzle_id: str, db: AsyncSession) -> None:
     """Delete (deactivate) a nozzle."""
-    # Verify nozzle belongs to station via pump
+    # nozzle_id is now VARCHAR in database, use directly as string
     stmt = (
         select(Nozzle)
         .join(Pump, Nozzle.pump_id == Pump.id)
