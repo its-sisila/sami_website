@@ -76,6 +76,12 @@ class TankWithLevel(TankRead):
 # Tank Reading Schemas
 # ============================================================================
 
+class NozzleReadingEntry(BaseModel):
+    """Schema for a single nozzle meter reading."""
+    nozzle_id: str
+    end_meter: Decimal
+
+
 class TankReadingEntry(BaseModel):
     """Single tank reading entry."""
     tank_id: UUID
@@ -83,6 +89,7 @@ class TankReadingEntry(BaseModel):
     volume_liters: Decimal
     staff_responsible_ids: list[str] | None = None
     monitored_by_ids: list[str] | None = None
+    meter_readings: list[NozzleReadingEntry] | None = None
 
 
 class TankReadingCreate(BaseModel):
@@ -104,6 +111,7 @@ class TankReadingRead(BaseModel):
     reading_type: str | None = None
     staff_responsible_ids: list[str] | None = None
     monitored_by_ids: list[str] | None = None
+    meter_readings: list[NozzleReadingEntry] | None = None
     created_at: datetime
     
     model_config = {"from_attributes": True}
@@ -159,8 +167,8 @@ class PumpRead(BaseModel):
 
 class NozzleCreate(BaseModel):
     """Schema for creating a new nozzle."""
-    nozzle_id: str | None = None  # User input text ID (optional if auto-generated)
-    nozzle_name: str  # e.g., LAD-1 (was display_name)
+    nozzle_id: str  # User input text ID (e.g., N-LAD-1) - REQUIRED
+    nozzle_name: str  # Display name (e.g., LAD-1)
     tank_id: UUID
     product_id: UUID
     pump_id: str | None = None  # e.g., P-LAD-1 (text, optional)
@@ -170,7 +178,7 @@ class NozzleCreate(BaseModel):
 
 class NozzleRead(BaseModel):
     """Nozzle response schema with related data."""
-    nozzle_id: UUID
+    nozzle_id: str  # Human-readable ID (e.g., N-LAD-1)
     pump_id: UUID
     tank_id: UUID
     product_id: UUID
