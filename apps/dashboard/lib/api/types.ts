@@ -482,6 +482,19 @@ export interface WeeklySalesStat {
     verifiedFunds: number;
 }
 
+export interface DailySalesSummary {
+    date: string;
+    day_shift_sales: number;
+    day_shift_liters: number;
+    day_shift_count: number;
+    night_shift_sales: number;
+    night_shift_liters: number;
+    night_shift_count: number;
+    total_sales: number;
+    total_liters: number;
+    total_count: number;
+}
+
 export interface TankNozzleSales {
     nozzle_id: string;
     nozzle_name: string;
@@ -582,6 +595,8 @@ export interface Transaction {
     amount: number;
     description: string | null;
     reference_number: string | null;
+    transaction_date: string;
+    liters: number | null;
     created_at: string;
 }
 
@@ -596,6 +611,33 @@ export interface TransactionCreate {
 
 export interface TransactionWithBalance extends Transaction {
     new_balance: number;
+}
+
+export interface BankAccount {
+    id: UUID;
+    station_id: UUID;
+    bank_name: string;
+    account_number: string;
+    account_name: string;
+    branch: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface BankAccountCreate {
+    bank_name: string;
+    account_number: string;
+    account_name: string;
+    branch?: string | null;
+}
+
+export interface BankAccountUpdate {
+    bank_name?: string;
+    account_number?: string;
+    account_name?: string;
+    branch?: string | null;
+    is_active?: boolean;
 }
 
 // ============================================================================
@@ -772,14 +814,35 @@ export interface ExpenseCreate {
 }
 
 export interface ExpenseUpdate {
-    category?: string | null;
-    payee?: string | null;
-    amount?: number | null;
+    category?: string;
+    payee?: string;
+    amount?: number;
     description?: string | null;
     invoice_number?: string | null;
     expense_date?: string | null;
     notes?: string | null;
 }
+
+export interface ExpenseCategoryRead {
+    id: UUID;
+    station_id: UUID | null;
+    name: string;
+    description: string | null;
+    is_default: boolean;
+    created_at: string;
+}
+
+export interface ExpenseCategoryCreate {
+    name: string;
+    description?: string | null;
+}
+
+export interface ExpenseCategoryUpdate {
+    name?: string;
+    description?: string | null;
+}
+
+
 
 export const EXPENSE_CATEGORIES = [
     'Transport',
@@ -866,6 +929,24 @@ export interface RegulatoryReturnCreate {
     // BUT the requirement says "Replace mock STAFF with useEmployees() hook".
     // AND the database schema proposed in next_steps_for_inventory.md says "staff_id UUID REFERENCES employees(id)".
     // Let's check existing backend code for `RegulatoryReturn`.
+}
+
+// ============================================================================
+// Station Settings Types
+// ============================================================================
+
+export interface StationSettings {
+    id: UUID;
+    station_id: UUID;
+    late_arrival_threshold: number;
+    early_departure_threshold: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface StationSettingsUpdate {
+    late_arrival_threshold?: number;
+    early_departure_threshold?: number;
 }
 
 // ============================================================================
