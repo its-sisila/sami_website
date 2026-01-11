@@ -5,7 +5,7 @@ Request/response models for orders endpoints.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from uuid import UUID
 
@@ -65,7 +65,7 @@ class FuelDeliveryBase(BaseModel):
     order_id: UUID | None = None
     liters_received: Decimal = Field(..., gt=0)
     delivery_date: date | None = None
-    delivery_time: str | None = None  # HH:MM format
+    delivery_time: str | time | None = None  # HH:MM format
     delivery_slip_number: str | None = None
     vehicle_number: str | None = None
     driver_name: str | None = None
@@ -95,6 +95,7 @@ class RegulatoryReturnBase(BaseModel):
     """Base regulatory return schema."""
     tank_id: UUID
     shift_id: UUID | None = None
+    staff_id: UUID | None = None
     liters_returned: Decimal = Field(..., gt=0)
     reason: str | None = None
     return_date: date | None = None
