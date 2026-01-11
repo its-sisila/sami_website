@@ -31,8 +31,9 @@ pytest.ini
 *.md
 docs/
 
-# Debug files
-*.txt
+# Debug files - but NOT requirements.txt
+orders_error.txt
+traceback.txt
 *.log
 
 # Development scripts
