@@ -101,8 +101,8 @@ class AdvancePayment(Base):
     employee_id: Mapped[UUID] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
     shift_id: Mapped[UUID | None] = mapped_column(ForeignKey("shifts.id", ondelete="SET NULL"))
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    payment_date: Mapped[date] = mapped_column(Date, default=date.today)
-    payment_time: Mapped[time | None] = mapped_column(Time)
+    payment_date: Mapped[date] = mapped_column("date", Date, default=date.today)  # Maps to 'date' column in DB
+    payment_time: Mapped[time | None] = mapped_column("time", Time)  # Maps to 'time' column in DB
     reason: Mapped[str | None] = mapped_column(Text)
     approved_by: Mapped[UUID | None] = mapped_column(ForeignKey("profiles.id"))
     notes: Mapped[str | None] = mapped_column(Text)
@@ -111,3 +111,21 @@ class AdvancePayment(Base):
     
     # Relationships
     employee: Mapped["Employee"] = relationship("Employee", back_populates="advance_payments")
+
+
+class PayrollPayment(Base):
+    """Records of payroll payments made to employees."""
+    
+    __tablename__ = "payroll_payments"
+    
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    employee_id: Mapped[UUID] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    gross_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    advances_deducted: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    net_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    paid_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    paid_by: Mapped[UUID | None] = mapped_column(ForeignKey("profiles.id"))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
