@@ -11,10 +11,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.accounts.models import CompanyAccount, CompanyTransaction, TransactionType
+from app.modules.accounts.models import CompanyAccount, CompanyTransaction, TransactionType, BankAccount
 from app.modules.accounts.schemas import (
     CompanyAccountCreate, CompanyAccountUpdate,
     TransactionCreate, TransactionWithBalance,
+    BankAccountCreate, BankAccountUpdate,
 )
 
 
@@ -146,3 +147,71 @@ async def get_transactions(
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+# ============================================================================
+# Bank Account CRUD
+# ============================================================================
+
+async def list_banks(
+    station_id: UUID,
+    db: AsyncSession,
+    active_only: bool = True
+) -> list[BankAccount]:
+    """List all bank accounts for a station."""
+    stmt = select(BankAccount).where(BankAccount.station_id == station_id)
+    if active_only:
+        stmt = stmt.where(BankAccount.is_active == True)
+    stmt = stmt.order_by(BankAccount.bank_name, BankAccount.account_number)
+    
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_bank(bank_id: UUID, db: AsyncSession) -> BankAccount | None:
+    """Get a single bank account by ID."""
+    stmt = select(BankAccount).where(BankAccount.id == bank_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def create_bank(
+    station_id: UUID,
+    data: BankAccountCreate,
+    db: AsyncSession
+) -> BankAccount:
+    """Create a new bank account."""
+    bank = BankAccount(
+        id=uuid4(),
+        station_id=station_id,
+        bank_name=data.bank_name,
+        account_number=data.account_number,
+        account_name=data.account_name,
+        branch=data.branch,
+        is_active=True,
+    )
+    db.add(bank)
+    await db.flush()
+    return bank
+
+
+async def update_bank(
+    bank: BankAccount,
+    data: BankAccountUpdate,
+    db: AsyncSession
+) -> BankAccount:
+    """Update a bank account."""
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(bank, field, value)
+    await db.flush()
+    return bank
+
+
+async def delete_bank(
+    bank: BankAccount,
+    db: AsyncSession
+) -> None:
+    """Soft delete a bank account."""
+    bank.is_active = False
+    await db.flush()
