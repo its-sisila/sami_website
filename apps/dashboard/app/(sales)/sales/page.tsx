@@ -96,6 +96,8 @@ export default function SalesPage() {
     const SALES_HISTORY_LIMIT = 20;
     const [salesHistoryFromDate, setSalesHistoryFromDate] = useState<string>('');
     const [salesHistoryToDate, setSalesHistoryToDate] = useState<string>('');
+    const [salesHistoryNozzle, setSalesHistoryNozzle] = useState<string>('');
+    const [salesHistoryProduct, setSalesHistoryProduct] = useState<string>('');
 
     // Add Nozzle Modal State
     const [showAddNozzleModal, setShowAddNozzleModal] = useState(false);
@@ -133,12 +135,13 @@ export default function SalesPage() {
             setIsLoadingData(true);
             setDataError(null);
             try {
-                const [employeesData, terminalsData, companiesData, nozzlesData, lastReadings] = await Promise.all([
+                const [employeesData, terminalsData, companiesData, nozzlesData, lastReadings, productsData] = await Promise.all([
                     api.employees.getActive(),
                     api.settlements.getTerminals(),
                     api.accounts.getAll(),
                     api.inventory.getNozzles(),
                     api.inventory.getLastMeterReadings().catch(() => ({})), // Fallback to empty if no readings exist
+                    api.inventory.getProducts(),
                 ]);
 
                 // Map employees to pumpers (filter by pumper role)
@@ -176,6 +179,14 @@ export default function SalesPage() {
                         pumpName: n.pump_name || n.nozzle_name || 'Unknown',
                         productName: n.product_name || 'Unknown',
                         productPrice: n.price_per_liter || 0,
+                    }))
+                );
+
+                // Map products for dropdown
+                setAvailableProducts(
+                    productsData.map((p: { id: string; code: string; name: string }) => ({
+                        id: p.code,  // Use product code as ID for filtering
+                        name: p.name,
                     }))
                 );
 
@@ -1872,6 +1883,32 @@ export default function SalesPage() {
                                     className="h-8 px-2 text-sm rounded-md border border-input bg-background text-foreground"
                                 />
                             </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs text-muted-foreground whitespace-nowrap">Nozzle:</label>
+                                <select
+                                    value={salesHistoryNozzle}
+                                    onChange={(e) => setSalesHistoryNozzle(e.target.value)}
+                                    className="h-8 px-2 text-sm rounded-md border border-input bg-background text-foreground"
+                                >
+                                    <option value="">All Nozzles</option>
+                                    {availableNozzles.map((n) => (
+                                        <option key={n.id} value={n.id}>{n.displayName}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs text-muted-foreground whitespace-nowrap">Product:</label>
+                                <select
+                                    value={salesHistoryProduct}
+                                    onChange={(e) => setSalesHistoryProduct(e.target.value)}
+                                    className="h-8 px-2 text-sm rounded-md border border-input bg-background text-foreground"
+                                >
+                                    <option value="">All Products</option>
+                                    {availableProducts.map((p) => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                             <button
                                 onClick={async () => {
                                     setSalesHistoryLoading(true);
@@ -1882,6 +1919,8 @@ export default function SalesPage() {
                                             offset: 0,
                                             startDate: salesHistoryFromDate || undefined,
                                             endDate: salesHistoryToDate || undefined,
+                                            nozzleId: salesHistoryNozzle || undefined,
+                                            productCode: salesHistoryProduct || undefined,
                                         });
                                         setSalesHistory(response.items);
                                         setSalesHistoryTotal(response.total);
@@ -1896,11 +1935,13 @@ export default function SalesPage() {
                             >
                                 {salesHistoryLoading ? 'Loading...' : 'Filter'}
                             </button>
-                            {(salesHistoryFromDate || salesHistoryToDate) && (
+                            {(salesHistoryFromDate || salesHistoryToDate || salesHistoryNozzle || salesHistoryProduct) && (
                                 <button
                                     onClick={async () => {
                                         setSalesHistoryFromDate('');
                                         setSalesHistoryToDate('');
+                                        setSalesHistoryNozzle('');
+                                        setSalesHistoryProduct('');
                                         setSalesHistoryLoading(true);
                                         setSalesHistoryOffset(0);
                                         try {
@@ -1989,6 +2030,8 @@ export default function SalesPage() {
                                                     offset: salesHistoryOffset + SALES_HISTORY_LIMIT,
                                                     startDate: salesHistoryFromDate || undefined,
                                                     endDate: salesHistoryToDate || undefined,
+                                                    nozzleId: salesHistoryNozzle || undefined,
+                                                    productCode: salesHistoryProduct || undefined,
                                                 });
                                                 setSalesHistory([...salesHistory, ...response.items]);
                                                 setSalesHistoryOffset(salesHistoryOffset + SALES_HISTORY_LIMIT);
