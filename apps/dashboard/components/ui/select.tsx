@@ -42,11 +42,11 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttrib
 })
 SelectTrigger.displayName = "SelectTrigger"
 
-const SelectValue = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement> & { placeholder?: string }>(({ className, placeholder, ...props }, ref) => {
+const SelectValue = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement> & { placeholder?: string; children?: React.ReactNode }>(({ className, placeholder, children, ...props }, ref) => {
     const context = React.useContext(SelectContext)
     return (
         <span ref={ref} className={cn("block truncate", className)} {...props}>
-            {context?.value || placeholder}
+            {context?.value ? (children || context.value) : placeholder}
         </span>
     )
 })
