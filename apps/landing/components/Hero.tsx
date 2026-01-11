@@ -12,7 +12,7 @@ export default function Hero() {
       {/* Full Screen Particle Effect */}
       <div className="absolute inset-0 z-0">
         <ParticleTextEffect
-          words={["Protect", "Predict", "Profit", "SAMI"]}
+          words={["SAMI", "Predict", "Protect", "Profit"]}
           backgroundColor="transparent"
         />
       </div>
