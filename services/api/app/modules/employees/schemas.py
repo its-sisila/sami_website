@@ -170,6 +170,8 @@ class PayrollEntry(BaseModel):
     gross_wage: Decimal
     total_advances: Decimal
     net_payable: Decimal
+    is_paid: bool = False
+    paid_at: datetime | None = None
 
 
 class PayrollResponse(BaseModel):
@@ -180,3 +182,36 @@ class PayrollResponse(BaseModel):
     total_gross: Decimal
     total_advances: Decimal
     total_net: Decimal
+
+
+# ============================================================================
+# Payroll Payment Schemas
+# ============================================================================
+
+class PayrollPaymentCreate(BaseModel):
+    """Schema for recording a payroll payment."""
+    employee_id: UUID
+    period_start: date
+    period_end: date
+    gross_amount: Decimal
+    advances_deducted: Decimal = Decimal("0")
+    net_amount: Decimal
+    paid_by: str | None = None  # Name of person who made the payment
+    notes: str | None = None
+
+
+class PayrollPaymentRead(BaseModel):
+    """Payroll payment response schema."""
+    id: UUID
+    employee_id: UUID
+    period_start: date
+    period_end: date
+    gross_amount: Decimal
+    advances_deducted: Decimal
+    net_amount: Decimal
+    paid_at: datetime
+    paid_by: UUID | None = None
+    notes: str | None = None
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}
