@@ -1,242 +1,165 @@
-# SAMI Landing Page
+# SAMI - Shed AI Manager Interface
 
-Production-ready single-page marketing site for **SAMI (Shed AI Manager Interface)** – an AI-driven operational, forecasting, and market intelligence platform for fuel stations.
+AI-driven operational, forecasting, and market intelligence platform for fuel stations.
 
-Built with **Next.js 14 (App Router)** + **TypeScript** + **Tailwind CSS**.
-
-🌐 **Live Site:** [www.getsami.app](https://www.getsami.app)
+🌐 **Live:** [www.getsami.app](https://www.getsami.app) | **Dashboard:** [dashboard.getsami.app](https://dashboard.getsami.app)
 
 ---
 
-## ✨ Key Features
+## 📦 Monorepo Structure
 
-### Modern UI/UX
-- **Particle Text Effect** – Interactive animated hero with canvas-based particle simulation
-- **Infinite Slider** – Seamless auto-scrolling company/feature carousel
-- **Progressive Blur** – Elegant gradient blur transitions
-- **Cursor Spotlight** – Dynamic spotlight effect following mouse movement
-- **Dark/Light Mode** – Theme toggle with `localStorage` persistence
-- **Framer Motion Animations** – Smooth transitions and micro-interactions
-
-### Sections
-- Hero with animated particle text
-- Who It's For (target audience)
-- Feature Pillars
-- Roadmap Timeline (animated)
-- How It Works
-- Benefits
-- Pricing Teaser
-- Security Snapshot
-- FAQ (accordion)
-- Call-to-Action
-- Footer
-
-### Demo Request System
-- **Modal Form** – Full-featured demo request with validation
-- **Resend Integration** – Server-side email delivery via [Resend](https://resend.com)
-- **Zod Validation** – Type-safe form validation with `react-hook-form`
-- Sends formatted emails to `contact@getsami.app`
-
-### Technical
-- Responsive layout (desktop-first, mobile-friendly)
-- Accessible, semantic HTML (WCAG AA oriented)
-- JSON-LD structured data (`SoftwareApplication`)
-- Vercel Analytics & Speed Insights ready
-- Zero public signup (curated onboarding only)
+```
+SAMI_v1_5/
+├── apps/
+│   ├── landing/          # Marketing website (Next.js)
+│   └── dashboard/        # Station management dashboard (Next.js)
+├── services/
+│   └── api/              # Backend API (FastAPI + Supabase)
+└── docs/                 # Documentation
+```
 
 ---
 
-## 🛠 Tech Stack
+## 🚀 Apps
 
-| Category | Technology |
-|----------|------------|
-| Framework | Next.js 14 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS |
-| Animations | Framer Motion |
-| Icons | Lucide React |
-| Forms | react-hook-form + Zod |
-| Email | Resend SDK |
-| UI Components | Radix UI (Slot), Custom Components |
-| Analytics | Vercel Analytics & Speed Insights |
+### Landing Page (`apps/landing`)
+
+Production-ready marketing site for SAMI.
+
+| Feature | Description |
+|---------|-------------|
+| Particle Text Effect | Interactive animated hero |
+| Demo Request System | Resend email integration |
+| Timeline | Animated roadmap |
+| Dark/Light Mode | Theme toggle |
+
+**Tech:** Next.js 14, TypeScript, Tailwind CSS, Framer Motion
+
+### Dashboard (`apps/dashboard`)
+
+Fuel station management dashboard.
+
+| Module | Status | Features |
+|--------|--------|----------|
+| **Inventory** | ✅ | Tank levels, daily readings, fuel orders, deliveries |
+| **Sales** | ✅ | Shift management, meter readings, card/credit sales |
+| **Staff** | ✅ | Attendance, payroll, scheduling |
+| **Accounts** | ✅ | Credit companies, transactions, expenses |
+| **Admin** | ✅ | Station config, user roles |
+| **Settings** | ✅ | Prices, wages, user invitations |
+
+**Tech:** Next.js 14, TypeScript, Tailwind CSS, SWR, Supabase Auth
+
+### Backend API (`services/api`)
+
+FastAPI backend connected to Supabase PostgreSQL.
+
+| Module | Endpoints |
+|--------|-----------|
+| Auth | `/auth/me`, token validation |
+| Inventory | `/inventory/tanks`, `/readings`, `/nozzles` |
+| Sales | `/sales/shifts`, `/history`, `/chart/weekly` |
+| Employees | `/employees`, `/attendance`, `/payroll` |
+| Accounts | `/accounts`, `/transactions` |
+| Orders | `/orders`, `/returns` |
+| Admin | `/admin/stations`, `/users` |
+
+**Tech:** FastAPI, SQLAlchemy, Pydantic, Supabase
 
 ---
 
-## 🚀 Getting Started
+## 🛠 Getting Started
 
 ### Prerequisites
-- **Node.js** LTS (v18+ recommended) – use [nvm-windows](https://github.com/coreybutler/nvm-windows)
-- **Git** – `git --version` should work in PowerShell
+
+- **Node.js** 18+ (use [nvm](https://github.com/nvm-sh/nvm))
+- **Python** 3.11+
+- **Git**
 
 ### Installation
 
-```powershell
-# Clone the repository
-git clone <repo-url> sami-landing
-cd sami-landing
+```bash
+# Clone repository
+git clone https://github.com/its-sisila/sami_website.git
+cd sami_website
 
-# Install dependencies
+# Landing page
+cd apps/landing
 npm install
+npm run dev        # http://localhost:3000
 
-# Start development server
-npm run dev
-```
+# Dashboard (in new terminal)
+cd apps/dashboard
+npm install
+$env:PORT=3001; npm run dev   # http://localhost:3001
 
-Open: [http://localhost:3000](http://localhost:3000)
-
-### Production Build
-
-```powershell
-npm run build
-npm start
-```
-
----
-
-## 📁 Project Structure
-
-```
-SAMI_v1_2/
-├── app/
-│   ├── layout.tsx          # Root layout with metadata
-│   ├── page.tsx            # Landing page (all sections)
-│   ├── global.css          # Global styles & theme variables
-│   └── login/
-│       └── page.tsx        # Login page placeholder
-├── actions/
-│   └── submit-demo.ts      # Server action for demo requests (Resend)
-├── components/
-│   ├── Header.tsx          # Navigation with mobile menu
-│   ├── Hero.tsx            # Hero with particle effect & CTAs
-│   ├── particle-text-effect.tsx  # Canvas-based text animation
-│   ├── FeaturePillars.tsx  # Feature cards section
-│   ├── Timeline.tsx        # Animated roadmap timeline
-│   ├── HowItWorks.tsx      # Process steps
-│   ├── Benefits.tsx        # Benefits grid
-│   ├── PricingTeaser.tsx   # Pricing CTA
-│   ├── SecuritySnapshot.tsx # Security features
-│   ├── FAQ.tsx             # Accordion FAQ
-│   ├── CallToAction.tsx    # Final CTA section
-│   ├── DemoModal.tsx       # Demo request modal with form
-│   ├── Footer.tsx          # Footer with links
-│   └── ui/
-│       ├── button.tsx      # Reusable button (CVA variants)
-│       ├── infinite-slider.tsx  # Auto-scrolling carousel
-│       ├── progressive-blur.tsx # Gradient blur component
-│       └── timeline.tsx    # Timeline base component
-├── lib/
-│   ├── site.config.ts      # Site configuration & constants
-│   └── utils.ts            # Utility functions (cn, etc.)
-├── public/                 # Static assets (images, favicon)
-└── tailwind.config.js      # Tailwind theme configuration
+# Backend API (in new terminal)
+cd services/api
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000   # http://localhost:8000
 ```
 
 ---
 
 ## ⚙️ Environment Variables
 
-Create a `.env.local` file for local development:
+### Landing (`apps/landing/.env.local`)
 
 ```env
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
+RESEND_API_KEY=re_xxxxxxxxxxxx
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
 ```
 
-| Variable | Description |
-|----------|-------------|
-| `RESEND_API_KEY` | API key from [Resend](https://resend.com) for sending demo request emails |
+### Dashboard (`apps/dashboard/.env.local`)
 
-### Production (Vercel)
-Set environment variables in Vercel dashboard → Settings → Environment Variables.
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
----
+### API (`services/api/.env`)
 
-## 🎨 Theming
-
-- **Toggle** persists via `localStorage`
-- Respects user system preference on first load
-- Theme variables defined in `global.css`
-- Tailwind `dark:` classes for dark mode variants
-
----
-
-## ♿ Accessibility
-
-- Semantic HTML structure with proper landmarks
-- Heading hierarchy maintained
-- Focus states retained for keyboard navigation
-- Modal: Escape key closes, backdrop click closes
-- ARIA labels for navigation toggle and modal
-- WCAG AA contrast ratios
-
----
-
-## 📧 Demo Request Flow
-
-1. User clicks "Request Demo" button
-2. Modal opens with form (Name, Company, Email, Message)
-3. Client-side validation via `react-hook-form` + `zod`
-4. Server action submits to Resend API
-5. Email sent to `contact@getsami.app`
-6. Success/error feedback displayed to user
+```env
+DATABASE_URL=postgresql://...
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_service_key
+JWT_SECRET=your_jwt_secret
+```
 
 ---
 
 ## 🚢 Deployment
 
-### Vercel (Recommended)
-1. Push to GitHub
-2. Import repository in Vercel
-3. Set `RESEND_API_KEY` in Environment Variables
-4. Deploy!
+### Vercel (2 Projects)
 
-### Other Platforms
-Works on Render, Fly.io, or any Node.js hosting. Ensure:
-- Node.js 18+
-- Environment variables configured
-- Build command: `npm run build`
-- Start command: `npm start`
+| Project | Root Directory | Domain |
+|---------|----------------|--------|
+| sami-landing | `apps/landing` | getsami.app |
+| sami-dashboard | `apps/dashboard` | dashboard.getsami.app |
 
----
+### Backend API
 
-## 📊 Analytics
+Deploy to Railway, Render, or Fly.io:
 
-Vercel Analytics and Speed Insights are pre-configured:
-- `@vercel/analytics` – Page view tracking
-- `@vercel/speed-insights` – Core Web Vitals monitoring
+- Build: `pip install -r requirements.txt`
+- Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
 ---
 
-## 🔧 Customization
+## 📊 Pilot Station Configuration
 
-| What | Where |
+| Item | Count |
 |------|-------|
-| Site name, URLs, social links | `lib/site.config.ts` |
-| Marketing copy | Individual component files |
-| Theme colors | `tailwind.config.js` + `global.css` |
-| Email template | `actions/submit-demo.ts` |
+| Tanks | 8 (LAD-1 to LAD-4, LP92-1/2, LP95-1, LSD-1) |
+| Nozzles | 16 |
+| Pumps | 8 |
+| Products | 4 (Auto Diesel, Petrol 92, Petrol 95, Super Diesel) |
+| Shifts | 2 (Day: 7AM-7PM, Night: 7PM-7AM) |
 
----
-
-## 📝 Development Notes
-
-### Key Improvements Made
-- ✅ Replaced basic Hero with particle text animation effect
-- ✅ Integrated Resend for production email delivery
-- ✅ Added Framer Motion for smooth animations
-- ✅ Implemented Timeline component for roadmap
-- ✅ Built Infinite Slider for trusted-by section
-- ✅ Fixed TypeScript errors and type safety
-- ✅ Configured Resend domain (mail.getsami.app)
-- ✅ Added progressive blur and cursor spotlight effects
-
-### Scripts
-
-```powershell
-npm run dev    # Start development server
-npm run build  # Production build
-npm start      # Start production server
-npm run lint   # Run ESLint
-```
+See `docs/pilot_station_details.md` for full configuration.
 
 ---
 
