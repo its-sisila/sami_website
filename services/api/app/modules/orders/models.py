@@ -56,6 +56,7 @@ class RegulatoryReturn(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True)
     tank_id: Mapped[UUID] = mapped_column(ForeignKey("tanks.id", ondelete="CASCADE"))
     shift_id: Mapped[UUID | None] = mapped_column(ForeignKey("shifts.id", ondelete="SET NULL"))
+    staff_id: Mapped[UUID | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
     liters_returned: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text)
     # Column named 'date' in schema, mapped via Column name argument
