@@ -18,18 +18,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-
-// Nozzle IDs - each pump has multiple nozzles (matching the form)
-const NOZZLES = [
-    { id: "N1-AD", name: "Nozzle 1 - Auto Diesel (Pump 1)" },
-    { id: "N2-AD", name: "Nozzle 2 - Auto Diesel (Pump 1)" },
-    { id: "N3-AD", name: "Nozzle 3 - Auto Diesel (Pump 2)" },
-    { id: "N4-AD", name: "Nozzle 4 - Auto Diesel (Pump 2)" },
-    { id: "N5-P92", name: "Nozzle 5 - Petrol 92 (Pump 3)" },
-    { id: "N6-P92", name: "Nozzle 6 - Petrol 92 (Pump 3)" },
-    { id: "N7-P95", name: "Nozzle 7 - Petrol 95 (Pump 4)" },
-    { id: "N8-SD", name: "Nozzle 8 - Super Diesel (Pump 4)" },
-];
+import { useRegulatoryReturns, useTanks, useEmployees } from "@/lib/hooks/use-api";
+import { Loader2 } from "lucide-react";
 
 // Reason options (matching the form)
 const REASONS = [
@@ -43,87 +33,6 @@ const REASONS = [
     { id: "other", label: "Other" },
 ];
 
-// Staff list
-const STAFF = ["Kumara", "Saman", "Nimal", "Sunil", "Kamal"];
-
-// Sample notes for mock data
-const SAMPLE_NOTES = [
-    "Routine inspection sample",
-    "Quality test completed successfully",
-    "PHI officer present during test",
-    "Monthly compliance check",
-    "Dispenser accuracy verified",
-    "Sample sent to lab for analysis",
-    "No issues found",
-    "",
-];
-
-// Generate mock regulatory return history
-function generateMockHistory() {
-    const history: Array<{
-        id: number;
-        date: string;
-        time: string;
-        nozzle: string;
-        nozzleId: string;
-        quantityReturned: number;
-        reason: string;
-        reasonLabel: string;
-        notes: string;
-        staffResponsible: string;
-    }> = [];
-
-    const today = new Date();
-    let id = 1;
-
-    // Generate history for last 60 days (regulatory returns are less frequent)
-    for (let daysAgo = 0; daysAgo < 60; daysAgo++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - daysAgo);
-        const dateStr = date.toISOString().split("T")[0];
-
-        // Pseudo-random based on date
-        const seed = date.getTime();
-        const random = (offset: number) => {
-            const x = Math.sin(seed + offset) * 10000;
-            return x - Math.floor(x);
-        };
-
-        // Not every day has a return - roughly 30% chance per day
-        if (random(0) < 0.3) {
-            const numReturns = random(1) < 0.8 ? 1 : 2; // Usually 1, sometimes 2
-
-            for (let i = 0; i < numReturns; i++) {
-                const nozzle = NOZZLES[Math.floor(random(2 + i) * NOZZLES.length)];
-                const reasonObj = REASONS[Math.floor(random(3 + i) * REASONS.length)];
-                const quantityReturned = Math.round(5 + random(4 + i) * 45); // 5-50 liters
-                const hour = 8 + Math.floor(random(5 + i) * 10); // Between 8:00-18:00
-                const minute = Math.floor(random(6 + i) * 60);
-                const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
-                const staff = STAFF[Math.floor(random(7 + i) * STAFF.length)];
-                const notes = SAMPLE_NOTES[Math.floor(random(8 + i) * SAMPLE_NOTES.length)];
-
-                history.push({
-                    id: id++,
-                    date: dateStr,
-                    time,
-                    nozzle: nozzle.name,
-                    nozzleId: nozzle.id,
-                    quantityReturned,
-                    reason: reasonObj.id,
-                    reasonLabel: reasonObj.label,
-                    notes,
-                    staffResponsible: staff,
-                });
-            }
-        }
-    }
-
-    return history;
-}
-
-const MOCK_HISTORY = generateMockHistory();
-
 export function RegulatoryReturnHistory() {
     const [startDate, setStartDate] = useState(() => {
         const date = new Date();
@@ -133,23 +42,64 @@ export function RegulatoryReturnHistory() {
     const [endDate, setEndDate] = useState(
         new Date().toISOString().split("T")[0]
     );
-    const [selectedNozzle, setSelectedNozzle] = useState("all");
+    const [selectedTank, setSelectedTank] = useState("all");
     const [selectedReason, setSelectedReason] = useState("all");
 
-    // Filter history based on date range, nozzle, and reason
+    // Fetch data
+    const { data: returns, isLoading: returnsLoading } = useRegulatoryReturns();
+    const { data: tanks } = useTanks();
+    const { data: employees } = useEmployees();
+
+    // Helper to get tank name
+    const getTankName = (tankId: string) => {
+        const tank = tanks?.find(t => t.id === tankId);
+        return tank ? tank.name : "Unknown Tank";
+    };
+
+    // Helper to get staff name
+    const getStaffName = (staffId: string | null) => {
+        if (!staffId) return "-";
+        const emp = employees?.find(e => e.id === staffId);
+        return emp ? (emp.name_with_initials || emp.full_name) : "Unknown Staff";
+    };
+
+    // Helper to get reason label
+    const getReasonLabel = (reasonId: string | null) => {
+        if (!reasonId) return "-";
+        // Check if reason matches a known ID, otherwise display as is
+        const known = REASONS.find(r => r.id === reasonId);
+        if (known) return known.label;
+
+        // Handle "Reason - Note" format if we stored it that way
+        const prefix = REASONS.find(r => reasonId.startsWith(r.label));
+        return prefix ? reasonId : (reasonId || "-");
+    };
+
+    // Filter history
     const filteredHistory = useMemo(() => {
-        return MOCK_HISTORY.filter((row) => {
-            const dateMatch = row.date >= startDate && row.date <= endDate;
-            const nozzleMatch = selectedNozzle === "all" || row.nozzleId === selectedNozzle;
-            const reasonMatch = selectedReason === "all" || row.reason === selectedReason;
-            return dateMatch && nozzleMatch && reasonMatch;
+        if (!returns) return [];
+        return returns.filter((row) => {
+            const dateMatch = row.return_date >= startDate && row.return_date <= endDate;
+            const tankMatch = selectedTank === "all" || row.tank_id === selectedTank;
+            // Fuzzy search for reason or exact match
+            const reasonMatch = selectedReason === "all" ||
+                (row.reason && (row.reason === selectedReason || row.reason.includes(REASONS.find(r => r.id === selectedReason)?.label || "____")));
+            return dateMatch && tankMatch && reasonMatch;
         });
-    }, [startDate, endDate, selectedNozzle, selectedReason]);
+    }, [returns, startDate, endDate, selectedTank, selectedReason]);
 
     // Calculate total returned
     const totalReturned = useMemo(() => {
-        return filteredHistory.reduce((sum, row) => sum + row.quantityReturned, 0);
+        return filteredHistory.reduce((sum, row) => sum + row.liters_returned, 0);
     }, [filteredHistory]);
+
+    if (returnsLoading) {
+        return (
+            <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
@@ -174,16 +124,16 @@ export function RegulatoryReturnHistory() {
                     />
                 </div>
                 <div className="grid gap-2">
-                    <span className="text-sm text-muted-foreground">Nozzle</span>
-                    <Select value={selectedNozzle} onValueChange={setSelectedNozzle}>
+                    <span className="text-sm text-muted-foreground">Tank</span>
+                    <Select value={selectedTank} onValueChange={setSelectedTank}>
                         <SelectTrigger>
-                            <SelectValue placeholder="All Nozzles" />
+                            <SelectValue placeholder="All Tanks" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All Nozzles</SelectItem>
-                            {NOZZLES.map((n) => (
-                                <SelectItem key={n.id} value={n.id}>
-                                    {n.name}
+                            <SelectItem value="all">All Tanks</SelectItem>
+                            {tanks?.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                    {t.name}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -222,34 +172,36 @@ export function RegulatoryReturnHistory() {
                         <TableRow>
                             <TableHead>Date</TableHead>
                             <TableHead>Time</TableHead>
-                            <TableHead>Nozzle ID</TableHead>
+                            <TableHead>Tank</TableHead>
                             <TableHead className="text-right">Qty (L)</TableHead>
                             <TableHead>Reason</TableHead>
-                            <TableHead>Notes</TableHead>
                             <TableHead>Staff</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredHistory.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                                     No regulatory returns found for the selected filters
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filteredHistory.map((row) => (
                                 <TableRow key={row.id}>
-                                    <TableCell className="font-medium">{row.date}</TableCell>
-                                    <TableCell className="text-muted-foreground">{row.time}</TableCell>
-                                    <TableCell className="font-mono text-sm">{row.nozzleId}</TableCell>
+                                    <TableCell className="font-medium">{new Date(row.return_date).toLocaleDateString()}</TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-sm">{getTankName(row.tank_id)}</TableCell>
                                     <TableCell className="text-right font-medium text-orange-600">
-                                        +{row.quantityReturned}
+                                        +{row.liters_returned}
                                     </TableCell>
-                                    <TableCell>{row.reasonLabel}</TableCell>
-                                    <TableCell className="max-w-[150px] truncate text-muted-foreground" title={row.notes}>
-                                        {row.notes || "-"}
+                                    <TableCell className="max-w-[200px] truncate" title={row.reason || ""}>
+                                        {getReasonLabel(row.reason)}
                                     </TableCell>
-                                    <TableCell>{row.staffResponsible}</TableCell>
+                                    <TableCell>
+                                        {getStaffName(row.staff_id)}
+                                    </TableCell>
                                 </TableRow>
                             ))
                         )}
