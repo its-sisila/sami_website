@@ -21,151 +21,51 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { api } from "@/lib/api/client";
+import { useTanks, useProducts, useFuelOrders } from "@/lib/hooks";
+import type { FuelOrder, FuelOrderCreate } from "@/lib/api/types";
+import { mutate } from "swr";
 
-// Product types
-const PRODUCTS = [
-    { id: "auto_diesel", name: "Auto Diesel" },
-    { id: "petrol_92", name: "Petrol 92" },
-    { id: "petrol_95", name: "Petrol 95" },
-    { id: "super_diesel", name: "Super Diesel" },
-];
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
-// Suppliers
+// Suppliers - could be moved to database later
 const SUPPLIERS = [
     { id: "badulla", name: "Badulla" },
     { id: "kolonnawa", name: "Kolonnawa" },
 ];
 
-// Status options
-const STATUSES = [
-    { id: "pending", name: "Pending" },
-    { id: "delivered", name: "Delivered" },
-    { id: "received", name: "Received" },
-];
-
-// Tanks for unloading
-const TANKS = [
-    { id: "LSD-1", name: "LSD-1 (Super Diesel)" },
-    { id: "LP95-1", name: "LP95-1 (Petrol 95)" },
-    { id: "LAD-1", name: "LAD-1 (Auto Diesel)" },
-    { id: "LAD-2", name: "LAD-2 (Auto Diesel)" },
-    { id: "LAD-3", name: "LAD-3 (Auto Diesel)" },
-    { id: "LAD-4", name: "LAD-4 (Auto Diesel)" },
-    { id: "LP92-1", name: "LP92-1 (Petrol 92)" },
-    { id: "LP92-2", name: "LP92-2 (Petrol 92)" },
-];
-
-// Map product to compatible tanks
-const PRODUCT_TANK_MAP: Record<string, string[]> = {
-    "auto_diesel": ["LAD-1", "LAD-2", "LAD-3", "LAD-4"],
-    "petrol_92": ["LP92-1", "LP92-2"],
-    "petrol_95": ["LP95-1"],
-    "super_diesel": ["LSD-1"],
-};
-
-// Generate mock orders for the past 60 days
-function generateMockOrders() {
-    const orders: Array<{
-        id: string;
-        supplier: string;
-        supplierId: string;
-        product: string;
-        productId: string;
-        liters: number;
-        status: string;
-        statusId: string;
-        placedAt: string;
-        date: string;
-        receivedAt: string | null;
-        unloadedTo: string | null;
-    }> = [];
-
-    const today = new Date();
-    let orderId = 1;
-
-    for (let daysAgo = 0; daysAgo < 60; daysAgo++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - daysAgo);
-
-        // Pseudo-random based on date
-        const seed = date.getTime();
-        const random = (offset: number) => {
-            const x = Math.sin(seed + offset) * 10000;
-            return x - Math.floor(x);
-        };
-
-        // 40% chance of order per day
-        if (random(0) < 0.4) {
-            const numOrders = random(1) < 0.7 ? 1 : 2;
-
-            for (let i = 0; i < numOrders; i++) {
-                const supplier = SUPPLIERS[Math.floor(random(2 + i) * SUPPLIERS.length)];
-                const product = PRODUCTS[Math.floor(random(3 + i) * PRODUCTS.length)];
-                const liters = [6600, 13200, 19800][Math.floor(random(4 + i) * 3)];
-
-                // Older orders are more likely to be delivered/received
-                let status: { id: string; name: string };
-                if (daysAgo > 5) {
-                    status = random(5 + i) < 0.5 ? STATUSES[1] : STATUSES[2]; // Delivered or Received
-                } else if (daysAgo > 2) {
-                    status = random(5 + i) < 0.3 ? STATUSES[0] : STATUSES[1]; // Pending or Delivered
-                } else {
-                    status = STATUSES[0]; // Pending
-                }
-
-                const placedHour = 8 + Math.floor(random(6 + i) * 10);
-                const placedMinute = Math.floor(random(7 + i) * 60);
-                const placedDate = new Date(date);
-                placedDate.setHours(placedHour, placedMinute);
-
-                const expectedDate = new Date(date);
-                expectedDate.setDate(expectedDate.getDate() + 1 + Math.floor(random(8 + i) * 2));
-
-                let receivedAt: string | null = null;
-                let unloadedTo: string | null = null;
-                if (status.id !== "pending") {
-                    const receivedDate = new Date(expectedDate);
-                    receivedDate.setHours(8 + Math.floor(random(9 + i) * 8), Math.floor(random(10 + i) * 60));
-                    receivedAt = receivedDate.toISOString();
-                    // Assign a compatible tank based on product
-                    const compatibleTanks = PRODUCT_TANK_MAP[product.id] || [];
-                    if (compatibleTanks.length > 0) {
-                        unloadedTo = compatibleTanks[Math.floor(random(11 + i) * compatibleTanks.length)];
-                    }
-                }
-
-                orders.push({
-                    id: `ORD-${orderId.toString().padStart(3, "0")}`,
-                    supplier: supplier.name,
-                    supplierId: supplier.id,
-                    product: product.name,
-                    productId: product.id,
-                    liters,
-                    status: status.name,
-                    statusId: status.id,
-                    placedAt: placedDate.toISOString(),
-                    date: expectedDate.toISOString().split("T")[0],
-                    receivedAt,
-                    unloadedTo,
-                });
-                orderId++;
-            }
-        }
-    }
-
-    return orders.sort((a, b) => new Date(b.placedAt).getTime() - new Date(a.placedAt).getTime());
+interface FuelOrdersManagerProps {
+    onDeliveryComplete?: () => void;
 }
 
-const INITIAL_ORDERS = generateMockOrders();
-
-export function FuelOrdersManager() {
+export function FuelOrdersManager({ onDeliveryComplete }: FuelOrdersManagerProps = {}) {
     const [isFormOpen, setIsFormOpen] = useState(false);
-    const [orders, setOrders] = useState(INITIAL_ORDERS);
-    const [receivingOrderId, setReceivingOrderId] = useState<string | null>(null);
-    const [receivedDate, setReceivedDate] = useState("");
-    const [receivingTank, setReceivingTank] = useState("");
-    const [customOrderId, setCustomOrderId] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Fetch real data from API
+    const { data: orders, isLoading: ordersLoading, error: ordersError, mutate: mutateOrders } = useFuelOrders();
+    const { data: products, isLoading: productsLoading } = useProducts();
+    const { data: tanks, isLoading: tanksLoading } = useTanks();
+
+    // Form state for new order
+    const [newProductId, setNewProductId] = useState("");
+    const [newSupplier, setNewSupplier] = useState("");
+    const [newLiters, setNewLiters] = useState("");
+    const [newExpectedDate, setNewExpectedDate] = useState("");
+    const [newNotes, setNewNotes] = useState("");
+
+    // Delivery Dialog State
+    const [deliveryOrder, setDeliveryOrder] = useState<FuelOrder | null>(null);
+    const [deliveryTankId, setDeliveryTankId] = useState("");
+    const [deliveryLiters, setDeliveryLiters] = useState("");
+    const [deliverySlip, setDeliverySlip] = useState("");
+    const [deliveryVehicle, setDeliveryVehicle] = useState("");
+    const [deliveryDriver, setDeliveryDriver] = useState("");
+    const [deliveryNotes, setDeliveryNotes] = useState("");
+    const [isDelivering, setIsDelivering] = useState(false);
 
     // Filter states
     const [startDate, setStartDate] = useState(() => {
@@ -180,335 +80,449 @@ export function FuelOrdersManager() {
 
     // Filtered orders
     const filteredOrders = useMemo(() => {
+        if (!orders) return [];
         return orders.filter((order) => {
-            const orderDate = order.placedAt.split("T")[0];
+            const orderDate = order.placed_at.split("T")[0];
             const dateMatch = orderDate >= startDate && orderDate <= endDate;
-            const productMatch = filterProduct === "all" || order.productId === filterProduct;
-            const statusMatch = filterStatus === "all" || order.statusId === filterStatus;
-            const supplierMatch = filterSupplier === "all" || order.supplierId === filterSupplier;
+            const productMatch = filterProduct === "all" || order.product_id === filterProduct;
+            const statusMatch = filterStatus === "all" || order.status === filterStatus;
+            const supplierMatch = filterSupplier === "all" || order.supplier.toLowerCase() === filterSupplier;
             return dateMatch && productMatch && statusMatch && supplierMatch;
         });
     }, [orders, startDate, endDate, filterProduct, filterStatus, filterSupplier]);
 
-    const initiateReceiveOrder = (id: string) => {
-        setReceivingOrderId(id);
-        // Default to current time formatted for datetime-local
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        setReceivedDate(now.toISOString().slice(0, 16));
-        setReceivingTank("");
-        setCustomOrderId(id);
+    // Get product name by ID
+    const getProductName = (productId: string) => {
+        const product = products?.find(p => p.id === productId);
+        return product?.name || "Unknown Product";
     };
 
-    const confirmReceiveOrder = () => {
-        if (!receivingOrderId) return;
+    // Create new order
+    const handleCreateOrder = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newProductId || !newSupplier || !newLiters) {
+            toast.warning("Please fill in all required fields");
+            return;
+        }
 
-        setOrders(orders.map(order =>
-            order.id === receivingOrderId
-                ? { ...order, status: "Received", statusId: "received", receivedAt: receivedDate, unloadedTo: receivingTank || null, id: customOrderId || order.id }
-                : order
-        ));
-        setReceivingOrderId(null);
-        setReceivedDate("");
-        setReceivingTank("");
-        setCustomOrderId("");
+        setIsSubmitting(true);
+        try {
+            await api.orders.create({
+                product_id: newProductId,
+                supplier: newSupplier,
+                liters_ordered: parseFloat(newLiters),
+                expected_date: newExpectedDate || null,
+                notes: newNotes || null,
+            });
+            // Reset form and refresh
+            setNewProductId("");
+            setNewSupplier("");
+            setNewLiters("");
+            setNewExpectedDate("");
+            setNewNotes("");
+            setIsFormOpen(false);
+            mutateOrders();
+            toast.success("Fuel order created successfully");
+        } catch (err: any) {
+            toast.error(`Failed to create order: ${err.message || "Unknown error"}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    // Calculate totals for pending orders only
+    // Open delivery dialog
+    const handleOpenDelivery = (order: FuelOrder) => {
+        setDeliveryOrder(order);
+        setDeliveryLiters(order.liters_ordered.toString());
+        setDeliveryTankId("");
+        setDeliverySlip("");
+        setDeliveryVehicle("");
+        setDeliveryDriver("");
+        setDeliveryNotes("");
+    };
+
+    const handleConfirmDelivery = async () => {
+        if (!deliveryOrder || !deliveryTankId || !deliveryLiters) {
+            toast.warning("Please select a tank and enter received liters.");
+            return;
+        }
+
+        setIsDelivering(true);
+        try {
+            // 1. Create Delivery Record
+            await api.orders.createDelivery({
+                order_id: deliveryOrder.id,
+                tank_id: deliveryTankId,
+                liters_received: parseFloat(deliveryLiters),
+                delivery_date: new Date().toISOString().split('T')[0],
+                delivery_time: new Date().toTimeString().slice(0, 5),
+                delivery_slip_number: deliverySlip || null,
+                vehicle_number: deliveryVehicle || null,
+                driver_name: deliveryDriver || null,
+                notes: deliveryNotes || null,
+            });
+
+            // 2. Update Order Status
+            await api.orders.update(deliveryOrder.id, {
+                status: "delivered",
+                received_at: new Date().toISOString()
+            });
+
+            toast.success("Delivery recorded successfully!");
+            setDeliveryOrder(null);
+            mutateOrders();
+            // Notify parent to refresh tank levels and inventory summary
+            onDeliveryComplete?.();
+        } catch (err: any) {
+            toast.error(`Failed to record delivery: ${err.message || "Unknown error"}`);
+        } finally {
+            setIsDelivering(false);
+        }
+    }
+
+    // Cancel order
+    const handleCancelOrder = async (orderId: string) => {
+        if (!confirm("Are you sure you want to cancel this order?")) return;
+        try {
+            await api.orders.cancel(orderId);
+            mutateOrders();
+            toast.success("Order cancelled");
+        } catch (err: any) {
+            toast.error(`Failed to cancel order: ${err.message || "Unknown error"}`);
+        }
+    };
+
+    // Mark payment made
+    const handleMarkPaid = async (orderId: string) => {
+        try {
+            await api.orders.markPaid(orderId);
+            mutateOrders();
+            toast.success("Payment marked");
+        } catch (err: any) {
+            toast.error(`Failed to mark paid: ${err.message || "Unknown error"}`);
+        }
+    };
+
+    // Calculate summary stats
     const pendingOrders = useMemo(() => {
-        return filteredOrders.filter(order => order.statusId === "pending");
+        return filteredOrders.filter(order => order.status === "pending");
     }, [filteredOrders]);
 
     const pendingLiters = useMemo(() => {
-        return pendingOrders.reduce((sum, order) => sum + order.liters, 0);
+        return pendingOrders.reduce((sum, order) => sum + Number(order.liters_ordered), 0);
     }, [pendingOrders]);
+
+    const deliveredOrders = useMemo(() => {
+        return filteredOrders.filter(order => order.status === "delivered");
+    }, [filteredOrders]);
+
+    const deliveredLiters = useMemo(() => {
+        return deliveredOrders.reduce((sum, order) => sum + Number(order.liters_ordered), 0);
+    }, [deliveredOrders]);
+
+    // Status badge styling
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case "pending":
+                return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>;
+            case "delivered":
+                return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Delivered</Badge>;
+            case "cancelled":
+                return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Cancelled</Badge>;
+            default:
+                return <Badge variant="outline">{status}</Badge>;
+        }
+    };
+
+    // Loading state
+    if (ordersLoading || productsLoading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-muted-foreground">Loading orders...</span>
+            </div>
+        );
+    }
+
+    // Error state
+    if (ordersError) {
+        return (
+            <div className="text-center py-12 text-red-500">
+                Failed to load orders: {ordersError.message}
+            </div>
+        );
+    }
+
+    // Filter tanks compatible with selected order
+    const compatibleTanks = tanks?.filter(t =>
+        deliveryOrder && t.product_id === deliveryOrder.product_id
+    ) || [];
 
     return (
         <div className="space-y-6">
-            {/* Modal Overlay for Receiving Order */}
-            {receivingOrderId && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-md animate-in zoom-in-95 duration-200">
-                        <CardHeader>
-                            <CardTitle>Confirm Order Receipt</CardTitle>
-                            <CardDescription>
-                                Please confirm details and enter the actual date/time.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="customOrderId">Order ID / Docket No</Label>
-                                <Input
-                                    id="customOrderId"
-                                    value={customOrderId}
-                                    onChange={(e) => setCustomOrderId(e.target.value)}
-                                    placeholder="Enter Order ID"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="receivedDate">Received Date & Time</Label>
-                                <Input
-                                    id="receivedDate"
-                                    type="datetime-local"
-                                    value={receivedDate}
-                                    onChange={(e) => setReceivedDate(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="receivingTank">Unloaded To Tank</Label>
-                                <Select value={receivingTank} onValueChange={setReceivingTank}>
-                                    <SelectTrigger id="receivingTank">
-                                        <SelectValue placeholder="Select Tank" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="LSD-1">LSD-1 (Super Diesel)</SelectItem>
-                                        <SelectItem value="LP95-1">LP95-1 (Petrol 95)</SelectItem>
-                                        <SelectItem value="LAD-1">LAD-1 (Auto Diesel)</SelectItem>
-                                        <SelectItem value="LAD-2">LAD-2 (Auto Diesel)</SelectItem>
-                                        <SelectItem value="LAD-3">LAD-3 (Auto Diesel)</SelectItem>
-                                        <SelectItem value="LAD-4">LAD-4 (Auto Diesel)</SelectItem>
-                                        <SelectItem value="LP92-1">LP92-1 (Petrol 92)</SelectItem>
-                                        <SelectItem value="LP92-2">LP92-2 (Petrol 92)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setReceivingOrderId(null)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button onClick={confirmReceiveOrder}>
-                                    Confirm Receipt
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h3 className="text-lg font-semibold">Fuel Orders</h3>
-                    <p className="text-sm text-muted-foreground">Manage and track fuel orders from suppliers.</p>
-                </div>
-                <Button onClick={() => setIsFormOpen(!isFormOpen)}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    {isFormOpen ? "Cancel Order" : "New Order"}
-                </Button>
-            </div>
-
-            {isFormOpen && (
-                <Card className="border-2 border-primary/20 animate-in fade-in slide-in-from-top-4">
-                    <CardHeader>
-                        <CardTitle>Create New Order</CardTitle>
-                        <CardDescription>Enter details for the new fuel consignment.</CardDescription>
+            {/* Summary Cards */}
+            <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Total Orders</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <form className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-end">
+                        <p className="text-2xl font-bold">{filteredOrders.length}</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-2xl font-bold text-yellow-600">{pendingOrders.length}</p>
+                        <p className="text-sm text-muted-foreground">{pendingLiters.toLocaleString()} L</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Delivered</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-2xl font-bold text-green-600">{deliveredOrders.length}</p>
+                        <p className="text-sm text-muted-foreground">{deliveredLiters.toLocaleString()} L</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* New Order Form */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>Fuel Orders</CardTitle>
+                            <CardDescription>Manage fuel orders and deliveries</CardDescription>
+                        </div>
+                        <Button onClick={() => setIsFormOpen(!isFormOpen)} variant="outline">
+                            <PlusCircle className="h-4 w-4 mr-2" />
+                            New Order
+                        </Button>
+                    </div>
+                </CardHeader>
+
+                {isFormOpen && (
+                    <CardContent className="border-t pt-4">
+                        <form onSubmit={handleCreateOrder} className="grid gap-4 md:grid-cols-6">
                             <div className="space-y-2">
-                                <Label htmlFor="supplier">Supplier</Label>
-                                <Select>
-                                    <SelectTrigger id="supplier">
-                                        <SelectValue placeholder="Select Supplier" />
+                                <Label>Product *</Label>
+                                <Select value={newProductId} onValueChange={setNewProductId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select product" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {SUPPLIERS.map((s) => (
-                                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                        {products?.map((product) => (
+                                            <SelectItem key={product.id} value={product.id}>
+                                                {product.name}
+                                            </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="product">Product</Label>
-                                <Select>
-                                    <SelectTrigger id="product">
-                                        <SelectValue placeholder="Select Product" />
+                                <Label>Supplier *</Label>
+                                <Select value={newSupplier} onValueChange={setNewSupplier}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select supplier" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {PRODUCTS.map((p) => (
-                                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                        {SUPPLIERS.map((supplier) => (
+                                            <SelectItem key={supplier.id} value={supplier.name}>
+                                                {supplier.name}
+                                            </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="liters">Quantity (Liters)</Label>
-                                <Input id="liters" type="number" placeholder="e.g. 6600" />
+                                <Label>Liters *</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="e.g. 10000"
+                                    value={newLiters}
+                                    onChange={(e) => setNewLiters(e.target.value)}
+                                />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="placedAt">Order Placed At</Label>
-                                <Input id="placedAt" type="datetime-local" />
+                                <Label>Expected Date</Label>
+                                <Input
+                                    type="date"
+                                    value={newExpectedDate}
+                                    onChange={(e) => setNewExpectedDate(e.target.value)}
+                                />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="date">Expected Date</Label>
-                                <Input id="date" type="date" />
+                                <Label>Notes</Label>
+                                <Input
+                                    placeholder="Optional notes"
+                                    value={newNotes}
+                                    onChange={(e) => setNewNotes(e.target.value)}
+                                />
                             </div>
-                            <div className="md:col-span-2 lg:col-span-4 flex justify-end gap-2 mt-4">
-                                <Button variant="outline" type="button" onClick={() => setIsFormOpen(false)}>
-                                    Cancel
+                            <div className="flex items-end">
+                                <Button type="submit" disabled={isSubmitting} className="w-full">
+                                    {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                    Place Order
                                 </Button>
-                                <Button type="submit">Submit Order</Button>
                             </div>
                         </form>
                     </CardContent>
-                </Card>
-            )}
+                )}
+            </Card>
 
+            {/* Filters */}
             <Card>
-                <CardHeader className="pb-4">
-                    <CardTitle>Order History</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {/* Filters */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-                        <div className="grid gap-2">
-                            <span className="text-sm text-muted-foreground">From</span>
+                <CardContent className="pt-6">
+                    <div className="grid gap-4 md:grid-cols-5">
+                        <div className="space-y-2">
+                            <Label>From Date</Label>
                             <Input
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="text-sm"
                             />
                         </div>
-                        <div className="grid gap-2">
-                            <span className="text-sm text-muted-foreground">To</span>
+                        <div className="space-y-2">
+                            <Label>To Date</Label>
                             <Input
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="text-sm"
                             />
                         </div>
-                        <div className="grid gap-2">
-                            <span className="text-sm text-muted-foreground">Product</span>
+                        <div className="space-y-2">
+                            <Label>Product</Label>
                             <Select value={filterProduct} onValueChange={setFilterProduct}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="All Products" />
+                                    <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Products</SelectItem>
-                                    {PRODUCTS.map((p) => (
-                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                    {products?.map((product) => (
+                                        <SelectItem key={product.id} value={product.id}>
+                                            {product.name}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="grid gap-2">
-                            <span className="text-sm text-muted-foreground">Supplier</span>
-                            <Select value={filterSupplier} onValueChange={setFilterSupplier}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="All Suppliers" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Suppliers</SelectItem>
-                                    {SUPPLIERS.map((s) => (
-                                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <span className="text-sm text-muted-foreground">Status</span>
+                        <div className="space-y-2">
+                            <Label>Status</Label>
                             <Select value={filterStatus} onValueChange={setFilterStatus}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="All Statuses" />
+                                    <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Statuses</SelectItem>
-                                    {STATUSES.map((s) => (
-                                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="delivered">Delivered</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Supplier</Label>
+                            <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Suppliers</SelectItem>
+                                    {SUPPLIERS.map((supplier) => (
+                                        <SelectItem key={supplier.id} value={supplier.id}>
+                                            {supplier.name}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="flex items-center gap-4 justify-end">
-                            <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
-                                Pending: {pendingLiters.toLocaleString()} L
-                            </Badge>
-                            <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                {pendingOrders.length} pending
-                            </span>
-                        </div>
                     </div>
+                </CardContent>
+            </Card>
 
-                    {/* Table */}
-                    <div className="rounded-md border max-h-[400px] overflow-auto">
+            {/* Orders Table */}
+            <Card>
+                <CardContent className="pt-6">
+                    <div className="rounded-md border max-h-[500px] overflow-auto">
                         <Table>
                             <TableHeader className="sticky top-0 bg-background">
                                 <TableRow>
-                                    <TableHead>Order ID</TableHead>
-                                    <TableHead>Supplier</TableHead>
+                                    <TableHead>Date</TableHead>
                                     <TableHead>Product</TableHead>
-                                    <TableHead>Placed At</TableHead>
-                                    <TableHead className="text-right">Qty (L)</TableHead>
-                                    <TableHead>Expected / Received</TableHead>
-                                    <TableHead>Time Received</TableHead>
-                                    <TableHead>Unloaded To</TableHead>
+                                    <TableHead>Supplier</TableHead>
+                                    <TableHead className="text-right">Liters</TableHead>
                                     <TableHead>Status</TableHead>
+                                    <TableHead>Payment</TableHead>
+                                    <TableHead>Expected</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {filteredOrders.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                                             No orders found for the selected filters
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     filteredOrders.map((order) => (
                                         <TableRow key={order.id}>
-                                            <TableCell className="font-medium">{order.id}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {new Date(order.placed_at).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell>{getProductName(order.product_id)}</TableCell>
                                             <TableCell>{order.supplier}</TableCell>
-                                            <TableCell>{order.product}</TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">
-                                                {new Date(order.placedAt).toLocaleString()}
+                                            <TableCell className="text-right font-medium">
+                                                {order.liters_ordered.toLocaleString()}
                                             </TableCell>
-                                            <TableCell className="text-right">{order.liters.toLocaleString()}</TableCell>
+                                            <TableCell>{getStatusBadge(order.status)}</TableCell>
                                             <TableCell>
-                                                <div className="flex flex-col">
-                                                    <span>{order.date}</span>
-                                                    {order.receivedAt && (
-                                                        <span className="text-xs text-green-600">
-                                                            Rec: {new Date(order.receivedAt).toLocaleDateString()}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-sm">
-                                                {order.receivedAt
-                                                    ? new Date(order.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                    : "-"
-                                                }
-                                            </TableCell>
-                                            <TableCell className="font-mono text-sm">
-                                                {order.unloadedTo || "-"}
+                                                {order.payment_made ? (
+                                                    <Badge variant="outline" className="bg-green-50 text-green-700">Paid</Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="bg-gray-50 text-gray-500">Unpaid</Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge
-                                                    variant={order.statusId === "pending" ? "secondary" : "default"}
-                                                    className={
-                                                        order.statusId === "pending"
-                                                            ? "bg-amber-500 hover:bg-amber-600 text-white"
-                                                            : "bg-green-600 hover:bg-green-700"
-                                                    }
-                                                >
-                                                    {order.status}
-                                                </Badge>
+                                                {order.expected_date ? new Date(order.expected_date).toLocaleDateString() : "-"}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                {order.statusId === "pending" && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="h-8 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
-                                                        onClick={() => initiateReceiveOrder(order.id)}
-                                                    >
-                                                        Mark Received
-                                                    </Button>
-                                                )}
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {order.status === "pending" && (
+                                                        <>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleOpenDelivery(order)}
+                                                                title="Mark Delivered"
+                                                            >
+                                                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleCancelOrder(order.id)}
+                                                                title="Cancel Order"
+                                                            >
+                                                                <XCircle className="h-4 w-4 text-red-600" />
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    {!order.payment_made && order.status !== "cancelled" && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleMarkPaid(order.id)}
+                                                            title="Mark Paid"
+                                                        >
+                                                            <Badge variant="outline" className="text-xs">Mark Paid</Badge>
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -516,9 +530,112 @@ export function FuelOrdersManager() {
                             </TableBody>
                         </Table>
                     </div>
+                    <div className="mt-4 text-sm text-muted-foreground">
+                        Showing {filteredOrders.length} order{filteredOrders.length !== 1 ? "s" : ""}
+                    </div>
                 </CardContent>
             </Card>
+
+            {/* Receive Delivery Dialog */}
+            <Dialog open={!!deliveryOrder} onOpenChange={(open) => !open && setDeliveryOrder(null)}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Receive Delivery</DialogTitle>
+                        <DialogDescription>
+                            Record details for Order #{deliveryOrder?.order_number || deliveryOrder?.id.slice(0, 8)}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {deliveryOrder && (
+                        <div className="grid gap-4 py-4">
+                            <div className="grid gap-2">
+                                <Label>Fuel Product</Label>
+                                <Input disabled value={getProductName(deliveryOrder.product_id)} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label>Received Into Tank *</Label>
+                                <Select value={deliveryTankId} onValueChange={setDeliveryTankId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select tank" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {compatibleTanks.length > 0 ? (
+                                            compatibleTanks.map((tank) => (
+                                                <SelectItem key={tank.id} value={tank.id}>
+                                                    {tank.name} ({tank.tank_type})
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <div className="p-2 text-sm text-muted-foreground">No compatible tanks found</div>
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label>Ordered Vol</Label>
+                                    <Input disabled value={deliveryOrder.liters_ordered} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Received Vol *</Label>
+                                    <Input
+                                        type="number"
+                                        value={deliveryLiters}
+                                        onChange={(e) => setDeliveryLiters(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label>Delivery Slip Number</Label>
+                                <Input
+                                    placeholder="e.g. SL-12345"
+                                    value={deliverySlip}
+                                    onChange={(e) => setDeliverySlip(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label>Vehicle No</Label>
+                                    <Input
+                                        placeholder="e.g. WP-1234"
+                                        value={deliveryVehicle}
+                                        onChange={(e) => setDeliveryVehicle(e.target.value)}
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Driver Name</Label>
+                                    <Input
+                                        placeholder="Optional"
+                                        value={deliveryDriver}
+                                        onChange={(e) => setDeliveryDriver(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label>Notes</Label>
+                                <Textarea
+                                    placeholder="Any comments..."
+                                    value={deliveryNotes}
+                                    onChange={(e) => setDeliveryNotes(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeliveryOrder(null)} disabled={isDelivering}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleConfirmDelivery} disabled={isDelivering || !deliveryTankId}>
+                            {isDelivering && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Confirm Delivery
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
-
