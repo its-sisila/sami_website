@@ -7,18 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-
-// Nozzle IDs - each pump has multiple nozzles
-const NOZZLES = [
-    { id: "N1-AD", name: "Nozzle 1 - Auto Diesel (Pump 1)" },
-    { id: "N2-AD", name: "Nozzle 2 - Auto Diesel (Pump 1)" },
-    { id: "N3-AD", name: "Nozzle 3 - Auto Diesel (Pump 2)" },
-    { id: "N4-AD", name: "Nozzle 4 - Auto Diesel (Pump 2)" },
-    { id: "N5-P92", name: "Nozzle 5 - Petrol 92 (Pump 3)" },
-    { id: "N6-P92", name: "Nozzle 6 - Petrol 92 (Pump 3)" },
-    { id: "N7-P95", name: "Nozzle 7 - Petrol 95 (Pump 4)" },
-    { id: "N8-SD", name: "Nozzle 8 - Super Diesel (Pump 4)" },
-];
+import { Loader2 } from "lucide-react";
+import { useEmployees, useNozzles, useCurrentShift } from "@/lib/hooks/use-api";
+import { api } from "@/lib/api/client";
+import { mutate } from "swr";
+import { toast } from "sonner";
 
 // Reason options for regulatory returns
 const REASONS = [
@@ -32,50 +25,136 @@ const REASONS = [
     { id: "other", label: "Other" },
 ];
 
-// Staff list
-const STAFF = [
-    { id: "kumara", name: "Kumara" },
-    { id: "saman", name: "Saman" },
-    { id: "nimal", name: "Nimal" },
-    { id: "sunil", name: "Sunil" },
-    { id: "kamal", name: "Kamal" },
-];
-
 export function RegulatoryReturnForm() {
     const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
     const [time, setTime] = useState(() => {
         const now = new Date();
         return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     });
-    const [nozzle, setNozzle] = useState("");
+    const [nozzleId, setNozzleId] = useState("");
     const [reason, setReason] = useState("");
     const [quantity, setQuantity] = useState("");
     const [notes, setNotes] = useState("");
     const [staffResponsible, setStaffResponsible] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = () => {
-        // In a real app, this would submit to the backend
-        console.log({
-            date,
-            time,
-            nozzle,
-            reason,
-            quantity,
-            notes,
-            staffResponsible,
-        });
-        // Reset form
-        setNozzle("");
-        setReason("");
-        setQuantity("");
-        setNotes("");
-        setStaffResponsible("");
+    // Fetch API data
+    const { data: employees, isLoading: loadingEmployees } = useEmployees();
+    const { data: nozzles, isLoading: loadingNozzles } = useNozzles();
+    const { data: currentShift } = useCurrentShift();
+
+    const handleSubmit = async () => {
+        if (!nozzleId || !quantity || !reason || !staffResponsible) {
+            toast.warning("Please fill in all required fields");
+            return;
+        }
+
+        const selectedNozzle = nozzles?.find(n => n.nozzle_id === nozzleId);
+        if (!selectedNozzle) {
+            toast.error("Invalid nozzle selected");
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            await api.regulatoryReturns.create({
+                tank_id: selectedNozzle.tank_id,
+                shift_id: currentShift?.id || null,
+                staff_id: staffResponsible,
+                liters_returned: parseFloat(quantity),
+                reason: reason,
+                return_date: date,
+                // notes are not part of schemas? wait, let me check.
+                // RegulatoryReturnCreate schema: tank_id, shift_id, staff_id, liters_returned, reason, return_date.
+                // It does NOT have 'notes'. 'reason' is the only text field.
+                // But the form has "Notes / Details".
+                // I should append notes to reason or ignore it?
+                // existing model has `reason: str | None`.
+                // I'll append notes to reason if provided.
+            });
+
+            // Reset form
+            setNozzleId("");
+            setReason("");
+            setQuantity("");
+            setNotes("");
+            setStaffResponsible("");
+
+            // Refresh history
+            mutate('/orders/returns');
+            toast.success("Regulatory return recorded");
+
+            // Optional: Show success message/toast
+        } catch (error: any) {
+            console.error("Failed to create return:", error);
+            toast.error(`Failed to create return: ${error.message || "Unknown error"}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
+    // Helper to format reason with notes
+    const getFormattedReason = () => {
+        let r = REASONS.find(opt => opt.id === reason)?.label || reason;
+        if (notes) {
+            r += ` - ${notes}`;
+        }
+        return r;
+    };
+
+    // Override handleSubmit to use formatted reason
+    const handleSubmitWithNotes = async () => {
+        if (!nozzleId || !quantity || !reason || !staffResponsible) {
+            toast.warning("Please fill in all required fields");
+            return;
+        }
+
+        const selectedNozzle = nozzles?.find(n => n.nozzle_id === nozzleId);
+        if (!selectedNozzle) {
+            toast.error("Invalid nozzle selected");
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            await api.regulatoryReturns.create({
+                tank_id: selectedNozzle.tank_id,
+                shift_id: currentShift?.id || null,
+                staff_id: staffResponsible,
+                liters_returned: parseFloat(quantity),
+                reason: reason === "other" ? notes : (notes ? `${REASONS.find(r => r.id === reason)?.label} - ${notes}` : REASONS.find(r => r.id === reason)?.label),
+                return_date: date,
+            });
+
+            setNozzleId("");
+            setReason("");
+            setQuantity("");
+            setNotes("");
+            setStaffResponsible("");
+            mutate('/orders/returns');
+            toast.success("Regulatory return recorded");
+        } catch (error: any) {
+            console.error("Failed to create return:", error);
+            toast.error(`Failed to create return: ${error.message || "Unknown error"}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (loadingEmployees || loadingNozzles) {
+        return (
+            <Card className="border-orange-200">
+                <CardContent className="py-8 flex justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                </CardContent>
+            </Card>
+        );
+    }
+
     return (
-        <Card className="border-orange-200 dark:border-orange-900">
+        <Card className="border-orange-200">
             <CardHeader className="pb-4">
-                <CardTitle className="text-orange-700 dark:text-orange-500">Regulatory Return</CardTitle>
+                <CardTitle className="text-orange-700">Regulatory Return</CardTitle>
                 <CardDescription>Log fuel poured back into the tank (e.g. after inspection test).</CardDescription>
             </CardHeader>
             <CardContent>
@@ -113,14 +192,14 @@ export function RegulatoryReturnForm() {
                     {/* Row 2: Nozzle, Reason, Staff */}
                     <div className="grid gap-2">
                         <Label htmlFor="nozzle-id">Nozzle ID</Label>
-                        <Select value={nozzle} onValueChange={setNozzle}>
+                        <Select value={nozzleId} onValueChange={setNozzleId}>
                             <SelectTrigger id="nozzle-id">
                                 <SelectValue placeholder="Select nozzle" />
                             </SelectTrigger>
                             <SelectContent>
-                                {NOZZLES.map((n) => (
-                                    <SelectItem key={n.id} value={n.id}>
-                                        {n.name}
+                                {nozzles?.map((n) => (
+                                    <SelectItem key={n.nozzle_id} value={n.nozzle_id}>
+                                        {n.nozzle_name || n.nozzle_id} {n.product_name ? `(${n.product_name})` : ''}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -148,9 +227,9 @@ export function RegulatoryReturnForm() {
                                 <SelectValue placeholder="Select staff" />
                             </SelectTrigger>
                             <SelectContent>
-                                {STAFF.map((s) => (
+                                {employees?.map((s) => (
                                     <SelectItem key={s.id} value={s.id}>
-                                        {s.name}
+                                        {s.name_with_initials || s.full_name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -170,10 +249,12 @@ export function RegulatoryReturnForm() {
                     </div>
                     <div className="grid gap-2 content-end">
                         <Button
-                            className="w-full border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950/30 text-orange-700 dark:text-orange-500"
+                            className="w-full border-orange-200 hover:bg-orange-50 text-orange-700"
                             variant="outline"
-                            onClick={handleSubmit}
+                            onClick={handleSubmitWithNotes}
+                            disabled={isSubmitting}
                         >
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Record Return
                         </Button>
                     </div>
@@ -182,4 +263,3 @@ export function RegulatoryReturnForm() {
         </Card>
     );
 }
-
