@@ -65,3 +65,22 @@ class CompanyTransaction(Base):
     
     # Relationships
     account: Mapped["CompanyAccount"] = relationship("CompanyAccount", back_populates="transactions")
+
+
+class BankAccount(Base):
+    """Bank accounts for the station/business."""
+    
+    __tablename__ = "bank_accounts"
+    
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    station_id: Mapped[UUID] = mapped_column(ForeignKey("stations.id", ondelete="CASCADE"))
+    bank_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    account_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    account_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    branch: Mapped[str | None] = mapped_column(String(100))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unique constraint for account number per station is good practice but optional here
+
