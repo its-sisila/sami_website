@@ -35,10 +35,14 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { BankManagerDialog } from "@/components/accounts/BankManagerDialog"
+import { ReportsDialog } from "@/components/accounts/ReportsDialog"
 import { api } from "@/lib/api/client"
-import { useAccounts, useExpenses, useCardTerminals, useCardSettlements, useShiftSettlements } from "@/lib/hooks"
+import { useAccounts, useExpenses, useCardTerminals, useCardSettlements, useShiftSettlements, useBanks } from "@/lib/hooks"
 import { mutate } from "swr"
 import { useReconciliation, useSalesChart } from "@/lib/hooks/use-reconcile"
+import { CategoryManagerDialog } from "@/components/accounts/CategoryManagerDialog"
+import { ExpenseDialog } from "@/components/accounts/ExpenseDialog"
 import type {
     CompanyAccount as ApiCompanyAccount,
     CompanyAccountCreate,
@@ -48,6 +52,9 @@ import type {
     ShiftSettlement as ApiShiftSettlement,
 } from "@/lib/api/types"
 import { companyAccountSchema, terminalSchema, settlementSchema, depositSchema, extractZodErrors } from "@/lib/validations/accounts"
+import { toast } from "sonner"
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary"
+import { withRetry } from "@/lib/utils"
 
 // --- Types & Helpers ---
 
@@ -831,48 +838,76 @@ function CompanyAccountsTable({ companies }: CompanyAccountsTableProps) {
                     <CardDescription>Manage credit accounts for corporate customers</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="rounded-md border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Company Name</TableHead>
-                                    <TableHead>Company ID</TableHead>
-                                    <TableHead>Contact Number</TableHead>
-                                    <TableHead className="text-right">Credit Limit (LKR)</TableHead>
-                                    <TableHead className="text-right">Balance (LKR)</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {companies.map((company) => (
-                                    <TableRow key={company.id}>
-                                        <TableCell className="font-medium">{company.name}</TableCell>
-                                        <TableCell className="font-mono text-xs">{company.id}</TableCell>
-                                        <TableCell>{company.contactNumber}</TableCell>
-                                        <TableCell className="text-right">{company.creditLimit.toLocaleString()}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Badge
-                                                variant="outline"
-                                                className={
-                                                    company.currentBalance > 0
-                                                        ? company.currentBalance > company.creditLimit
-                                                            ? "bg-red-100 text-red-700 border-red-200" // Over limit
-                                                            : "bg-orange-50 text-orange-700 border-orange-200" // Owes money
-                                                        : "bg-green-100 text-green-700 border-green-200" // Credit/Paid
-                                                }
-                                            >
-                                                {company.currentBalance.toLocaleString()}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" asChild>
-                                                <Link href={`/accounts/${company.id}`}>View History</Link>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                    <div className="overflow-x-auto -mx-4 md:mx-0">
+                        <div className="min-w-[700px] px-4 md:px-0">
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Company Name</TableHead>
+                                            <TableHead>Company ID</TableHead>
+                                            <TableHead>Contact Number</TableHead>
+                                            <TableHead className="text-right">Credit Limit (LKR)</TableHead>
+                                            <TableHead className="text-right">Balance (LKR)</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {companies.map((company) => {
+                                            const usagePercent = company.creditLimit > 0
+                                                ? (company.currentBalance / company.creditLimit) * 100
+                                                : 0
+                                            const isNearLimit = usagePercent >= 80 && usagePercent < 100
+                                            const isOverLimit = company.currentBalance > company.creditLimit
+
+                                            return (
+                                                <TableRow key={company.id}>
+                                                    <TableCell className="font-medium">
+                                                        <div className="flex items-center gap-2">
+                                                            {company.name}
+                                                            {isOverLimit && (
+                                                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                                                                    OVER LIMIT
+                                                                </Badge>
+                                                            )}
+                                                            {isNearLimit && !isOverLimit && (
+                                                                <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0">
+                                                                    NEAR LIMIT
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="font-mono text-xs">{company.id}</TableCell>
+                                                    <TableCell>{company.contactNumber}</TableCell>
+                                                    <TableCell className="text-right">{company.creditLimit.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={
+                                                                company.currentBalance > 0
+                                                                    ? company.currentBalance > company.creditLimit
+                                                                        ? "bg-red-100 text-red-700 border-red-200" // Over limit
+                                                                        : isNearLimit
+                                                                            ? "bg-amber-50 text-amber-700 border-amber-200" // Near limit
+                                                                            : "bg-orange-50 text-orange-700 border-orange-200" // Owes money
+                                                                    : "bg-green-100 text-green-700 border-green-200" // Credit/Paid
+                                                            }
+                                                        >
+                                                            {company.currentBalance.toLocaleString()}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button variant="ghost" size="sm" asChild>
+                                                            <Link href={`/accounts/${company.id}`}>View History</Link>
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -1022,8 +1057,7 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
     const [errorMessage, setErrorMessage] = React.useState("")
 
     const showError = (message: string) => {
-        setErrorMessage(message)
-        setErrorDialogOpen(true)
+        toast.error(message)
     }
 
     // Validation error state for settlements
@@ -1047,17 +1081,25 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                 return
             }
 
-            await api.settlements.createCardSettlement({
-                terminal_id: terminal.id,
-                batch_id: newSettlement.batchId!,
-                settlement_date: newSettlement.date || new Date().toISOString().split('T')[0],
-                settlement_time: newSettlement.time || null,
-                amount: Number(newSettlement.amount),
-                notes: null
-            })
+            await withRetry(
+                () => api.settlements.createCardSettlement({
+                    terminal_id: terminal.id,
+                    batch_id: newSettlement.batchId!,
+                    settlement_date: newSettlement.date || new Date().toISOString().split('T')[0],
+                    settlement_time: newSettlement.time || null,
+                    amount: Number(newSettlement.amount),
+                    notes: null
+                }),
+                {
+                    maxRetries: 2,
+                    onRetry: (attempt) => toast.info(`Retrying... (attempt ${attempt})`)
+                }
+            )
 
-            // Refresh settlements list
+            // Refresh settlements list and reconciliation
             mutate('/settlements/card')
+            mutate((key: string) => typeof key === 'string' && key.startsWith('/sales/reconciliation'), undefined, { revalidate: true })
+            mutate((key: string) => typeof key === 'string' && key.startsWith('/sales/chart/weekly'), undefined, { revalidate: true })
 
             setIsAddingSettlement(false)
             setNewSettlement({
@@ -1066,8 +1108,9 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                 status: "Pending",
                 shift: "Day"
             })
+            toast.success("Settlement recorded successfully")
         } catch (err: any) {
-            showError(`Failed to create settlement: ${err.message || err.detail || "Unknown error"}`)
+            toast.error(`Failed to create settlement: ${err.message || err.detail || "Unknown error"}`)
         } finally {
             setIsSavingSettlement(false)
         }
@@ -1076,13 +1119,29 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
     // Verify settlement handler - updates status to Verified
     const handleVerifySettlement = async (id: string) => {
         setIsSavingSettlement(true)
+
+        // Optimistic update - immediately update local cache
+        const previousData = apiCardSettlements
+        mutate(
+            '/settlements/card',
+            apiCardSettlements?.map(s => s.id === id ? { ...s, status: 'verified' as const } : s),
+            false // Don't revalidate yet
+        )
+
         try {
-            await api.settlements.updateCardSettlement(id, {
-                status: 'verified'
-            })
+            await withRetry(
+                () => api.settlements.updateCardSettlement(id, { status: 'verified' }),
+                { maxRetries: 2, onRetry: (attempt) => toast.info(`Retrying verification... (attempt ${attempt})`) }
+            )
+            // Revalidate all related data
             mutate('/settlements/card')
+            mutate((key: string) => typeof key === 'string' && key.startsWith('/sales/reconciliation'), undefined, { revalidate: true })
+            mutate((key: string) => typeof key === 'string' && key.startsWith('/sales/chart/weekly'), undefined, { revalidate: true })
+            toast.success("Settlement verified")
         } catch (err: any) {
-            showError(`Failed to verify settlement: ${err.message || err.detail || "Unknown error"}`)
+            // Rollback optimistic update on error
+            mutate('/settlements/card', previousData, false)
+            toast.error(`Failed to verify settlement: ${err.message || err.detail || "Unknown error"}`)
         } finally {
             setIsSavingSettlement(false)
         }
@@ -1125,8 +1184,9 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
 
             setIsAdding(false)
             setNewTerminal({ provider: "VISA/MASTER", status: "active" })
+            toast.success("Terminal created successfully")
         } catch (err: any) {
-            showError(`Failed to create terminal: ${err.message || err.detail || "Unknown error"}`)
+            toast.error(`Failed to create terminal: ${err.message || err.detail || "Unknown error"}`)
         } finally {
             setIsSavingTerminal(false)
         }
@@ -1169,8 +1229,9 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
 
             setEditingId(null)
             setEditForm({})
+            toast.success("Terminal updated successfully")
         } catch (err: any) {
-            alert(`Failed to update terminal: ${err.message || err.detail || "Unknown error"}`)
+            toast.error(`Failed to update terminal: ${err.message || err.detail || "Unknown error"}`)
         } finally {
             setIsSavingTerminal(false)
         }
@@ -1193,8 +1254,9 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
         try {
             await api.settlements.deleteTerminal(deleteTerminalId)
             mutate('/settlements/terminals')
+            toast.success("Terminal deleted successfully")
         } catch (err: any) {
-            alert(`Failed to delete terminal: ${err.message || err.detail || "Unknown error"}`)
+            toast.error(`Failed to delete terminal: ${err.message || err.detail || "Unknown error"}`)
         } finally {
             setIsSavingTerminal(false)
             setDeleteTerminalId(null)
@@ -1891,14 +1953,17 @@ function DepositsView({ deposits }: DepositsViewProps) {
         setLocalDeposits(mappedDeposits)
     }, [mappedDeposits])
 
+    // Fetch banks for selection
+    const { data: banks } = useBanks(true)
+
     // Bank options
-    const bankOptions = [
-        { value: "DFCC Bank|102005373457", label: "DFCC Bank - 102005373457" },
-        { value: "DFCC Bank|101001020208", label: "DFCC Bank - 101001020208" },
-        { value: "DFCC Bank|10100120039", label: "DFCC Bank - 10100120039" },
-        { value: "BOC|85763347", label: "BOC - 85763347" },
-        { value: "BOC|75941669", label: "BOC - 75941669" },
-    ]
+    const bankOptions = React.useMemo(() => {
+        if (!banks) return []
+        return banks.map(b => ({
+            value: `${b.bank_name}|${b.account_number}`,
+            label: `${b.bank_name} - ${b.account_number}${b.branch ? ` (${b.branch})` : ''}`
+        }))
+    }, [banks])
 
     // Method options
     const methodOptions = [
@@ -1923,8 +1988,7 @@ function DepositsView({ deposits }: DepositsViewProps) {
     const [errorMessage, setErrorMessage] = React.useState("")
 
     const showError = (message: string) => {
-        setErrorMessage(message)
-        setErrorDialogOpen(true)
+        toast.error(message)
     }
 
     // Validation error state for deposits
@@ -2020,6 +2084,8 @@ function DepositsView({ deposits }: DepositsViewProps) {
             })
 
             mutate('/settlements/shift')
+            mutate((key: string) => typeof key === 'string' && key.startsWith('/sales/reconciliation'), undefined, { revalidate: true })
+            mutate((key: string) => typeof key === 'string' && key.startsWith('/sales/chart/weekly'), undefined, { revalidate: true })
 
             // Reset form
             setNewDeposit({
@@ -2031,9 +2097,10 @@ function DepositsView({ deposits }: DepositsViewProps) {
                 shift: "Day"
             })
             setIsSavingDeposit(false)
+            toast.success("Deposit recorded successfully")
 
         } catch (err: any) {
-            showError(`Failed to add deposit: ${err.message || err.detail || "Unknown error"}`)
+            toast.error(`Failed to add deposit: ${err.message || err.detail || "Unknown error"}`)
             setIsSavingDeposit(false)
         }
     }
@@ -2041,13 +2108,28 @@ function DepositsView({ deposits }: DepositsViewProps) {
     // Handle verify deposit
     const handleVerifyDeposit = async (id: string) => {
         setIsSavingDeposit(true)
+
+        // Optimistic update - immediately update local cache
+        const previousData = apiShiftSettlements
+        mutate(
+            '/settlements/shift',
+            apiShiftSettlements?.map(s => s.id === id ? { ...s, status: 'verified' as const } : s),
+            false // Don't revalidate yet
+        )
+
         try {
             await api.settlements.updateShiftSettlement(id, {
                 status: 'verified'
             })
+            // Revalidate all related data
             mutate('/settlements/shift')
+            mutate((key: string) => typeof key === 'string' && key.startsWith('/sales/reconciliation'), undefined, { revalidate: true })
+            mutate((key: string) => typeof key === 'string' && key.startsWith('/sales/chart/weekly'), undefined, { revalidate: true })
+            toast.success("Deposit verified")
         } catch (err: any) {
-            showError(`Failed to verify deposit: ${err.message || err.detail || "Unknown error"}`)
+            // Rollback optimistic update on error
+            mutate('/settlements/shift', previousData, false)
+            toast.error(`Failed to verify deposit: ${err.message || err.detail || "Unknown error"}`)
         } finally {
             setIsSavingDeposit(false)
         }
@@ -2159,7 +2241,12 @@ function DepositsView({ deposits }: DepositsViewProps) {
                         <CardContent>
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label>Bank Account</Label>
+                                    <div className="flex items-center justify-between">
+                                        <Label>Bank Account</Label>
+                                        <div className="-mt-1">
+                                            <BankManagerDialog />
+                                        </div>
+                                    </div>
                                     <Select value={newDeposit.bank} onValueChange={(val: string) => setNewDeposit({ ...newDeposit, bank: val })}>
                                         <SelectTrigger className={depositErrors.bank ? 'border-destructive' : ''}>
                                             <SelectValue placeholder="Select Bank" />
@@ -2420,7 +2507,12 @@ function ExpensesView() {
     const expensesByCategory = React.useMemo(() => {
         const grouped: Record<string, { payee: string; total: number; count: number; items: Expense[] }[]> = {}
 
-        EXPENSE_CATEGORIES.forEach(cat => {
+        // Get unique categories from expenses + standard list
+        // In a real scenario, we should fetch categories from API to ensure we have all of them,
+        // but for grouping, relying on what's in expenses + known categories is safe enough for display.
+        const dynamicCategories = Array.from(new Set([...EXPENSE_CATEGORIES, ...expenses.map(e => e.category)]))
+
+        dynamicCategories.forEach(cat => {
             const catExpenses = expenses.filter(e => e.category === cat)
             if (catExpenses.length === 0) return
 
@@ -2492,8 +2584,25 @@ function ExpensesView() {
         return data
     }, [allExpenses])
 
+    // State for expense editing
+    const [isExpenseDialogOpen, setIsExpenseDialogOpen] = React.useState(false)
+    const [selectedExpense, setSelectedExpense] = React.useState<Expense | undefined>(undefined)
+
+    const handleEditExpense = (expense: Expense) => {
+        setSelectedExpense(expense)
+        setIsExpenseDialogOpen(true)
+    }
+
+    const handleExpenseSaved = () => {
+        mutate('/expenses')
+    }
+
     return (
         <div className="space-y-6">
+            <div className="flex justify-end">
+                <CategoryManagerDialog />
+            </div>
+
             {/* Expenses Trend Chart */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
@@ -2665,7 +2774,19 @@ function ExpensesView() {
                                                                                     <TableCell className="py-1">
                                                                                         <Badge variant="outline" className="text-[10px]">{item.shift}</Badge>
                                                                                     </TableCell>
-                                                                                    <TableCell className="py-1 text-right font-medium">{item.amount.toLocaleString()}</TableCell>
+                                                                                    <TableCell className="py-1 text-right font-medium">
+                                                                                        <div className="flex justify-end gap-2 items-center">
+                                                                                            <span>LKR {item.amount.toLocaleString()}</span>
+                                                                                            <Button
+                                                                                                variant="ghost"
+                                                                                                size="icon"
+                                                                                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                                                onClick={() => handleEditExpense(item)}
+                                                                                            >
+                                                                                                <Pencil className="h-3 w-3" />
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                    </TableCell>
                                                                                 </TableRow>
                                                                             ))}
                                                                         </TableBody>
@@ -2704,8 +2825,8 @@ export default function AccountsPage() {
                 name: acc.name,
                 contactPerson: acc.contact_person || "",
                 contactNumber: acc.contact_number || "",
-                creditLimit: acc.credit_limit,
-                currentBalance: acc.current_balance,
+                creditLimit: Number(acc.credit_limit),
+                currentBalance: Number(acc.current_balance),
                 address: acc.address || "",
                 email: acc.email || ""
             }))
@@ -2757,15 +2878,19 @@ export default function AccountsPage() {
                 credit_limit: newCompany.creditLimit || 0,
             }
 
-            await api.accounts.create(data)
+            await withRetry(
+                () => api.accounts.create(data),
+                { maxRetries: 2, onRetry: (attempt) => toast.info(`Retrying... (attempt ${attempt})`) }
+            )
 
             // Refresh accounts list
             mutate('/accounts?active_only=true')
 
             setIsAddCompanyOpen(false)
             setNewCompany({ creditLimit: 0, currentBalance: 0 })
+            toast.success("Company account created successfully")
         } catch (err: any) {
-            alert(`Failed to create account: ${err.message || err.detail || "Unknown error"}`)
+            toast.error(`Failed to create account: ${err.message || err.detail || "Unknown error"}`)
         } finally {
             setIsCreating(false)
         }
@@ -2782,38 +2907,45 @@ export default function AccountsPage() {
     }
 
     return (
-        <div className="flex-1 space-y-4 p-8 pt-6 min-h-screen">
-            <div className="flex items-center justify-between space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight text-foreground">Accounts & Finance</h2>
+        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 min-h-screen">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Accounts & Finance</h2>
                 <div className="flex items-center space-x-2">
-                    <Button>
-                        <FileText className="mr-2 h-4 w-4" />
-                        Download Reports
-                    </Button>
+                    <ReportsDialog>
+                        <Button>
+                            <FileText className="mr-2 h-4 w-4" />
+                            Download Reports
+                        </Button>
+                    </ReportsDialog>
                 </div>
             </div>
 
             <Tabs defaultValue="company-accounts" className="space-y-4">
-                <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/50">
-                    <TabsTrigger value="company-accounts" className="data-[state=active]:bg-background data-[state=active]:text-primary py-2 text-xs md:text-sm">
-                        <FileText className="h-4 w-4 mr-2 hidden md:inline-block" />
-                        Credit Companies
+                <TabsList className="flex w-full overflow-x-auto gap-1 p-1 bg-muted/50 md:grid md:grid-cols-5 scrollbar-hide">
+                    <TabsTrigger value="company-accounts" className="flex-shrink-0 data-[state=active]:bg-background data-[state=active]:text-primary py-2 px-3 text-xs md:text-sm md:px-4">
+                        <FileText className="h-4 w-4 mr-1.5 md:mr-2" />
+                        <span className="hidden sm:inline">Credit Companies</span>
+                        <span className="sm:hidden">Credit</span>
                     </TabsTrigger>
-                    <TabsTrigger value="terminals" className="data-[state=active]:bg-background data-[state=active]:text-primary py-2 text-xs md:text-sm">
-                        <CreditCard className="h-4 w-4 mr-2 hidden md:inline-block" />
-                        Card Terminals
+                    <TabsTrigger value="terminals" className="flex-shrink-0 data-[state=active]:bg-background data-[state=active]:text-primary py-2 px-3 text-xs md:text-sm md:px-4">
+                        <CreditCard className="h-4 w-4 mr-1.5 md:mr-2" />
+                        <span className="hidden sm:inline">Card Terminals</span>
+                        <span className="sm:hidden">Cards</span>
                     </TabsTrigger>
-                    <TabsTrigger value="deposits" className="data-[state=active]:bg-background data-[state=active]:text-primary py-2 text-xs md:text-sm">
-                        <Upload className="h-4 w-4 mr-2 hidden md:inline-block" />
-                        Cash Deposits
+                    <TabsTrigger value="deposits" className="flex-shrink-0 data-[state=active]:bg-background data-[state=active]:text-primary py-2 px-3 text-xs md:text-sm md:px-4">
+                        <Upload className="h-4 w-4 mr-1.5 md:mr-2" />
+                        <span className="hidden sm:inline">Cash Deposits</span>
+                        <span className="sm:hidden">Deposits</span>
                     </TabsTrigger>
-                    <TabsTrigger value="working-capital" className="data-[state=active]:bg-background data-[state=active]:text-primary py-2 text-xs md:text-sm">
-                        <Wallet className="h-4 w-4 mr-2 hidden md:inline-block" />
-                        Working Capital
+                    <TabsTrigger value="working-capital" className="flex-shrink-0 data-[state=active]:bg-background data-[state=active]:text-primary py-2 px-3 text-xs md:text-sm md:px-4">
+                        <Wallet className="h-4 w-4 mr-1.5 md:mr-2" />
+                        <span className="hidden sm:inline">Working Capital</span>
+                        <span className="sm:hidden">Capital</span>
                     </TabsTrigger>
-                    <TabsTrigger value="expenses" className="data-[state=active]:bg-background data-[state=active]:text-primary py-2 text-xs md:text-sm">
-                        <TrendingUp className="h-4 w-4 mr-2 hidden md:inline-block text-red-500 transform rotate-180" />
-                        Company Expenses
+                    <TabsTrigger value="expenses" className="flex-shrink-0 data-[state=active]:bg-background data-[state=active]:text-primary py-2 px-3 text-xs md:text-sm md:px-4">
+                        <TrendingUp className="h-4 w-4 mr-1.5 md:mr-2 text-red-500 transform rotate-180" />
+                        <span className="hidden sm:inline">Company Expenses</span>
+                        <span className="sm:hidden">Expenses</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -2926,19 +3058,27 @@ export default function AccountsPage() {
                 </TabsContent>
 
                 <TabsContent value="terminals" className="mt-6">
-                    <CardTerminalsView settlements={settlements} onVerifySettlement={handleVerifySettlement} />
+                    <ErrorBoundary fallbackTitle="Error loading Card Terminals">
+                        <CardTerminalsView settlements={settlements} onVerifySettlement={handleVerifySettlement} />
+                    </ErrorBoundary>
                 </TabsContent>
 
                 <TabsContent value="deposits" className="mt-6">
-                    <DepositsView deposits={deposits} onVerifyDeposit={handleVerifyDeposit} />
+                    <ErrorBoundary fallbackTitle="Error loading Cash Deposits">
+                        <DepositsView deposits={deposits} onVerifyDeposit={handleVerifyDeposit} />
+                    </ErrorBoundary>
                 </TabsContent>
 
                 <TabsContent value="working-capital" className="mt-6">
-                    <WorkingCapitalView deposits={deposits} settlements={settlements} />
+                    <ErrorBoundary fallbackTitle="Error loading Working Capital">
+                        <WorkingCapitalView deposits={deposits} settlements={settlements} />
+                    </ErrorBoundary>
                 </TabsContent>
 
                 <TabsContent value="expenses" className="mt-6">
-                    <ExpensesView />
+                    <ErrorBoundary fallbackTitle="Error loading Expenses">
+                        <ExpensesView />
+                    </ErrorBoundary>
                 </TabsContent>
             </Tabs>
         </div>

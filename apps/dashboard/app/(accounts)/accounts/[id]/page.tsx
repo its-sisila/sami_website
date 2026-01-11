@@ -15,11 +15,19 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Download, FileText, Phone, Mail, Building2, CreditCard, Wallet } from "lucide-react"
+import { ArrowLeft, Download, FileText, Phone, Mail, Building2, CreditCard, Wallet, Loader2, AlertTriangle, Trash2 } from "lucide-react"
+import { api } from "@/lib/api/client"
+import { useAccount, useTransactions } from "@/lib/hooks"
+import { toast } from "sonner"
+import { mutate } from "swr"
+import { withRetry } from "@/lib/utils"
+import type { TransactionCreate } from "@/lib/api/types"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { useRouter } from "next/navigation"
 
-// --- Mock Data ---
+// --- Types ---
 
-interface Transaction {
+interface LocalTransaction {
     id: string
     date: string
     type: "Purchase" | "Payment"
@@ -30,94 +38,175 @@ interface Transaction {
     amount: number
 }
 
-// Mocking transaction history for a few companies
-const TRANSACTIONS: { [key: string]: Transaction[] } = {
-    "1": [ // ABC Logistics
-        { id: "t1", date: "2024-10-24 08:30", type: "Purchase", poNumber: "PO-8821", vehicleNumber: "WP-CA-1234", description: "Diesel - 50L", liters: 50, amount: 17000 },
-        { id: "t2", date: "2024-10-24 14:15", type: "Purchase", poNumber: "PO-8822", vehicleNumber: "WP-CB-5678", description: "Diesel - 100L", liters: 100, amount: 34000 },
-        { id: "t3", date: "2024-10-23 09:00", type: "Payment", description: "Bank Transfer - Oct Payment", amount: -50000 },
-        { id: "t4", date: "2024-10-22 11:20", type: "Purchase", poNumber: "PO-8819", vehicleNumber: "WP-CA-1234", description: "Diesel - 60L", liters: 60, amount: 20400 },
-    ],
-    "2": [ // City Taxis
-        { id: "t5", date: "2024-10-24 10:00", type: "Purchase", vehicleNumber: "WP-QA-1111", description: "Petrol 92 - 25L", liters: 25, amount: 9250 },
-        { id: "t6", date: "2024-10-20 15:00", type: "Payment", description: "Cash Payment", amount: -15000 },
-    ]
-}
-
-const COMPANIES = [
-    { id: "1", name: "ABC Logistics", contactPerson: "John Doe", email: "john@abc.com", phone: "077-1234567", creditLimit: 500000, currentBalance: 125000, address: "123, Logistics Way, Colombo 01" },
-    { id: "2", name: "City Taxis", contactPerson: "Jane Smith", email: "jane@citytaxis.com", phone: "071-9876543", creditLimit: 100000, currentBalance: -5000, address: "45, Taxi Stand, Kandy" },
-    { id: "3", name: "Green Farms", contactPerson: "Mike Brown", email: "mike@greenfarms.lk", phone: "076-5551212", creditLimit: 750000, currentBalance: 450000, address: "No 5, Farm Road, Nuwara Eliya" },
-    { id: "4", name: "Metro Bus Svc", contactPerson: "Sarah Lee", email: "accts@metrobus.lk", phone: "011-2345678", creditLimit: 2000000, currentBalance: 0, address: "Central Bus Stand, Pettah" },
-    { id: "5", name: "Tech Solutions", contactPerson: "David Kim", email: "david@techsol.com", phone: "077-7778888", creditLimit: 300000, currentBalance: 320000, address: "Tech Park, Malabe" },
-]
 
 export default function CompanyDetailsPage() {
     const params = useParams()
     const id = params?.id as string | undefined
 
-    // Local state for data
-    const [company, setCompany] = React.useState<typeof COMPANIES[0] | undefined>(undefined)
-    const [transactions, setTransactions] = React.useState<Transaction[]>([])
+    // Fetch data from API
+    const { data: company, isLoading: companyLoading, error: companyError } = useAccount(id || null)
+    const { data: apiTransactions, isLoading: transactionsLoading } = useTransactions(id || null)
+
+    // Map API transactions to local format
+    const transactions: LocalTransaction[] = React.useMemo(() => {
+        if (!apiTransactions) return []
+        return apiTransactions.map(t => ({
+            id: t.id,
+            date: t.transaction_date,
+            type: t.transaction_type === 'credit' ? 'Payment' as const : 'Purchase' as const,
+            description: t.description || (t.transaction_type === 'credit' ? 'Payment' : 'Credit Sale'),
+            poNumber: t.reference_number || undefined,
+            vehicleNumber: undefined,
+            liters: t.liters ? Number(t.liters) : undefined,
+            amount: t.transaction_type === 'credit' ? -Number(t.amount) : Number(t.amount)
+        }))
+    }, [apiTransactions])
 
     // Payment Form state
     const [isPaymentFormOpen, setIsPaymentFormOpen] = React.useState(false)
     const [paymentAmount, setPaymentAmount] = React.useState("")
     const [paymentMethod, setPaymentMethod] = React.useState("Cash")
     const [paymentRef, setPaymentRef] = React.useState("")
-    const [paymentDate, setPaymentDate] = React.useState(new Date().toISOString().split('T')[0])
+    const [isSavingPayment, setIsSavingPayment] = React.useState(false)
 
     // Edit Mode State
     const [isEditing, setIsEditing] = React.useState(false)
-    const [editForm, setEditForm] = React.useState<typeof COMPANIES[0] | undefined>(undefined)
+    const [editForm, setEditForm] = React.useState({
+        name: '',
+        address: '',
+        contactPerson: '',
+        phone: '',
+        email: '',
+        creditLimit: 0
+    })
+    const [isSavingEdit, setIsSavingEdit] = React.useState(false)
 
-    // Load data from mock on mount
+    // Deactivation State
+    const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = React.useState(false)
+    const [isDeactivating, setIsDeactivating] = React.useState(false)
+    const router = useRouter()
+
+    // Initialize edit form when company data loads
     React.useEffect(() => {
-        if (id) {
-            const foundCompany = COMPANIES.find((c) => c.id === id)
-            setCompany(foundCompany)
-            setEditForm(foundCompany)
-            setTransactions(TRANSACTIONS[id] || [])
+        if (company) {
+            setEditForm({
+                name: company.name,
+                address: company.address || '',
+                contactPerson: company.contact_person || '',
+                phone: company.contact_number || '',
+                email: company.email || '',
+                creditLimit: Number(company.credit_limit)
+            })
         }
-    }, [id])
+    }, [company])
 
-    const handleSavePayment = () => {
-        if (!company) return
+    const handleSavePayment = async () => {
+        if (!company || !id) return
         const amount = parseFloat(paymentAmount)
-        if (isNaN(amount) || amount <= 0) return
-
-        const newTransaction: Transaction = {
-            id: `tp-${Date.now()}`,
-            date: `${paymentDate} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-            type: "Payment",
-            description: `${paymentMethod} Payment`,
-            amount: -amount, // Payments are negative in this model
-            vehicleNumber: paymentRef
+        if (isNaN(amount) || amount <= 0) {
+            toast.error("Please enter a valid amount")
+            return
         }
 
-        // Update local state
-        setTransactions(prev => [newTransaction, ...prev])
-        setCompany(prev => prev ? { ...prev, currentBalance: prev.currentBalance - amount } : undefined)
+        setIsSavingPayment(true)
+        try {
+            const data: TransactionCreate = {
+                account_id: id,
+                transaction_type: 'credit', // Payment reduces balance
+                amount: amount,
+                description: `${paymentMethod} Payment`,
+                reference_number: paymentRef || null,
+            }
 
-        // Reset form
-        setIsPaymentFormOpen(false)
-        setPaymentAmount("")
-        setPaymentRef("")
-        setPaymentMethod("Cash")
+            await withRetry(
+                () => api.accounts.recordTransaction(data),
+                { maxRetries: 2, onRetry: (attempt) => toast.info(`Retrying... (attempt ${attempt})`) }
+            )
+
+            // Refresh data
+            mutate(`/accounts/${id}`)
+            mutate(`/accounts/${id}/transactions`)
+
+            // Reset form
+            setIsPaymentFormOpen(false)
+            setPaymentAmount("")
+            setPaymentRef("")
+            setPaymentMethod("Cash")
+            toast.success("Payment recorded successfully")
+        } catch (err: any) {
+            toast.error(`Failed to record payment: ${err.message || err.detail || "Unknown error"}`)
+        } finally {
+            setIsSavingPayment(false)
+        }
     }
 
-    const handleSaveEdit = () => {
-        if (!editForm) return
-        setCompany(editForm)
-        setIsEditing(false)
+    const handleSaveEdit = async () => {
+        if (!company || !id) return
+
+        setIsSavingEdit(true)
+        try {
+            await withRetry(
+                () => api.accounts.update(id, {
+                    name: editForm.name,
+                    address: editForm.address || null,
+                    contact_person: editForm.contactPerson || null,
+                    contact_number: editForm.phone || null,
+                    email: editForm.email || null,
+                    credit_limit: editForm.creditLimit
+                }),
+                { maxRetries: 2, onRetry: (attempt) => toast.info(`Retrying... (attempt ${attempt})`) }
+            )
+
+            // Refresh data
+            mutate(`/accounts/${id}`)
+            mutate('/accounts?active_only=true')
+
+            setIsEditing(false)
+            toast.success("Company details updated")
+        } catch (err: any) {
+            toast.error(`Failed to update: ${err.message || err.detail || "Unknown error"}`)
+        } finally {
+            setIsSavingEdit(false)
+        }
     }
 
-    // Simple loading or not found state
-    if (!id) {
-        return <div className="p-8">Loading...</div>
+    const handleDeactivate = async () => {
+        if (!id) return
+
+        setIsDeactivating(true)
+        try {
+            await withRetry(
+                () => api.accounts.update(id, { is_active: false }),
+                { maxRetries: 2, onRetry: (attempt) => toast.info(`Retrying... (attempt ${attempt})`) }
+            )
+
+            // Refresh accounts list
+            mutate('/accounts?active_only=true')
+
+            toast.success("Company account deactivated")
+            setIsDeactivateDialogOpen(false)
+
+            // Navigate back to accounts list
+            router.push('/accounts')
+        } catch (err: any) {
+            toast.error(`Failed to deactivate: ${err.message || err.detail || "Unknown error"}`)
+        } finally {
+            setIsDeactivating(false)
+        }
     }
 
-    if (!company || !editForm) {
+    // Loading state
+    if (companyLoading || transactionsLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="mt-2 text-muted-foreground">Loading company details...</p>
+            </div>
+        )
+    }
+
+    // Error or not found state
+    if (companyError || !company) {
         return (
             <div className="p-8 space-y-4">
                 <Button variant="ghost" size="sm" asChild>
@@ -127,12 +216,14 @@ export default function CompanyDetailsPage() {
                     </Link>
                 </Button>
                 <div className="flex flex-col items-center justify-center p-8 border border-dashed rounded-lg bg-muted/20">
+                    <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
                     <h2 className="text-xl font-semibold">Company Not Found</h2>
                     <p className="text-muted-foreground">ID: {id}</p>
                 </div>
             </div>
         )
     }
+
 
     // Calculate stats
     const totalPurchases = transactions.filter(t => t.type === "Purchase").reduce((acc, t) => acc + t.amount, 0)
@@ -151,12 +242,34 @@ export default function CompanyDetailsPage() {
                     </Button>
                 </div>
                 {!isEditing && (
-                    <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                        <FileText className="h-4 w-4 mr-2" />
-                        Edit Details
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                            <FileText className="h-4 w-4 mr-2" />
+                            Edit Details
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setIsDeactivateDialogOpen(true)}
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Deactivate
+                        </Button>
+                    </div>
                 )}
             </div>
+
+            {/* Deactivation Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={isDeactivateDialogOpen}
+                title="Deactivate Company Account?"
+                message={`Are you sure you want to deactivate ${company.name}? The company will no longer appear in the active accounts list. This can be reversed by a system administrator.`}
+                confirmText={isDeactivating ? "Deactivating..." : "Deactivate"}
+                onConfirm={handleDeactivate}
+                onCancel={() => setIsDeactivateDialogOpen(false)}
+                variant="danger"
+            />
 
             {/* Header / Edit Form */}
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
@@ -216,10 +329,20 @@ export default function CompanyDetailsPage() {
                                 </div>
                             </div>
                             <div className="flex gap-2 pt-2">
-                                <Button size="sm" onClick={handleSaveEdit}>Save Changes</Button>
+                                <Button size="sm" onClick={handleSaveEdit} disabled={isSavingEdit}>
+                                    {isSavingEdit && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                    {isSavingEdit ? "Saving..." : "Save Changes"}
+                                </Button>
                                 <Button size="sm" variant="ghost" onClick={() => {
                                     setIsEditing(false)
-                                    setEditForm(company) // Reset
+                                    setEditForm({
+                                        name: company.name,
+                                        address: company.address || '',
+                                        contactPerson: company.contact_person || '',
+                                        phone: company.contact_number || '',
+                                        email: company.email || '',
+                                        creditLimit: Number(company.credit_limit)
+                                    })
                                 }}>Cancel</Button>
                             </div>
                         </div>
@@ -229,19 +352,19 @@ export default function CompanyDetailsPage() {
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                 <div className="flex items-center gap-1.5">
                                     <Building2 className="h-3.5 w-3.5" />
-                                    <span>{company.address}</span>
+                                    <span>{company.address || 'No address'}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                     <FileText className="h-3.5 w-3.5" />
-                                    <span>{company.contactPerson}</span>
+                                    <span>{company.contact_person || 'No contact'}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                     <Phone className="h-3.5 w-3.5" />
-                                    <span>{company.phone}</span>
+                                    <span>{company.contact_number || 'N/A'}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                     <Mail className="h-3.5 w-3.5" />
-                                    <span>{company.email}</span>
+                                    <span>{company.email || 'N/A'}</span>
                                 </div>
                             </div>
                         </>
@@ -251,16 +374,16 @@ export default function CompanyDetailsPage() {
                 <div className="flex flex-col items-end gap-2">
                     <div className="text-right">
                         <p className="text-sm font-medium text-muted-foreground">Current Balance</p>
-                        <div className={`text-3xl font-bold ${company.currentBalance > 0
-                            ? company.currentBalance > company.creditLimit ? "text-red-600" : "text-orange-600"
+                        <div className={`text-3xl font-bold ${Number(company.current_balance) > 0
+                            ? Number(company.current_balance) > Number(company.credit_limit) ? "text-red-600" : "text-orange-600"
                             : "text-green-600"
                             }`}>
-                            LKR {company.currentBalance.toLocaleString()}
+                            LKR {Number(company.current_balance).toLocaleString()}
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground bg-secondary px-3 py-1 rounded-full">
                         <span>Credit Limit:</span>
-                        <span className="font-semibold text-foreground">LKR {company.creditLimit.toLocaleString()}</span>
+                        <span className="font-semibold text-foreground">LKR {Number(company.credit_limit).toLocaleString()}</span>
                     </div>
                     <div className="mt-2 flex gap-2">
                         <Button
@@ -280,7 +403,7 @@ export default function CompanyDetailsPage() {
 
             {/* Payment Form */}
             {isPaymentFormOpen && (
-                <Card className="border-green-200 bg-green-50/50 dark:bg-green-900/10 dark:border-green-900">
+                <Card className="border-green-200 bg-green-50/50">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base">New Payment Entry</CardTitle>
                     </CardHeader>
@@ -324,8 +447,10 @@ export default function CompanyDetailsPage() {
                                 <Button
                                     className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                                     onClick={handleSavePayment}
+                                    disabled={isSavingPayment}
                                 >
-                                    Save
+                                    {isSavingPayment && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                    {isSavingPayment ? "Saving..." : "Save"}
                                 </Button>
                                 <Button variant="outline" onClick={() => setIsPaymentFormOpen(false)}>Cancel</Button>
                             </div>
