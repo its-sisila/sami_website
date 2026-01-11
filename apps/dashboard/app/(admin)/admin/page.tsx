@@ -6,9 +6,11 @@ import { StationList, Station } from '@/components/admin/StationList';
 import { AuditLogViewer } from '@/components/admin/AuditLogViewer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { api } from '@/lib/api/client';
-import { useStations, useAuditLog, useSupportAccess } from '@/lib/hooks';
+import { useStations, useAuditLog, useSupportAccess, useCurrentUser } from '@/lib/hooks';
+import { useRouter } from 'next/navigation';
 import { mutate } from 'swr';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowRightCircle } from 'lucide-react';
+import { User } from '@/lib/api/types';
 
 // Mock Data Fallback
 const MOCK_STATIONS: Station[] = [
@@ -38,7 +40,7 @@ export default function AdminPage() {
     const [isToggling, setIsToggling] = useState(false);
 
     // Station Configuration State
-    const [configTab, setConfigTab] = useState<'products' | 'tanks' | 'nozzles'>('products');
+    const [configTab, setConfigTab] = useState<'details' | 'products' | 'tanks' | 'nozzles'>('details');
     const [products, setProducts] = useState<{ id: string; code: string; name: string; price_per_liter: number }[]>([]);
     const [tanks, setTanks] = useState<{ id: string; name: string; product_id: string; product_name?: string; tank_type?: string; capacity_liters: number }[]>([]);
     const [nozzles, setNozzles] = useState<any[]>([]);
@@ -59,8 +61,36 @@ export default function AdminPage() {
     const [newNozzle, setNewNozzle] = useState({ nozzle_id: '', nozzle_name: '', tank_id: '', product_id: '', pump_id: '' });
     const [isSaving, setIsSaving] = useState(false);
 
+    // Onboard Station Modal state
+    const [showOnboardModal, setShowOnboardModal] = useState(false);
+    const [newStation, setNewStation] = useState({ name: '', owner_email: '', address: '', phone: '' });
+    const [isOnboarding, setIsOnboarding] = useState(false);
+
     // Confirm dialog state
     const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'nozzle' | 'tank' | 'product' | null; id: string; name: string }>({ type: null, id: '', name: '' });
+
+    // Station Details Editing State
+    const [stationDetails, setStationDetails] = useState({ name: '', address: '', phone: '', email: '', status: 'active' as 'setup' | 'active' | 'suspended' | 'archived' });
+    const [isSavingDetails, setIsSavingDetails] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+
+    // Invite Owner State
+    const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteFullName, setInviteFullName] = useState('');
+    const [isInviting, setIsInviting] = useState(false);
+    const [inviteSuccess, setInviteSuccess] = useState('');
+
+    // Owner Credential Management State
+    const [stationUsers, setStationUsers] = useState<User[]>([]);
+    const [ownerUser, setOwnerUser] = useState<User | null>(null);
+    const [resetPassword, setResetPassword] = useState('');
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
+    const [resetPasswordSuccess, setResetPasswordSuccess] = useState('');
+
+    // Access Dashboard State
+    const router = useRouter();
+    const { data: currentUser } = useCurrentUser();
+    const [isAssigningMyStation, setIsAssigningMyStation] = useState(false);
 
     // Fetch station configuration data when station is selected
     useEffect(() => {
@@ -74,10 +104,11 @@ export default function AdminPage() {
         const fetchConfigData = async () => {
             setIsLoadingConfig(true);
             try {
-                const [productsData, tanksData, nozzlesData] = await Promise.all([
+                const [productsData, tanksData, nozzlesData, usersData] = await Promise.all([
                     api.inventory.getProducts(),
                     api.inventory.getTanks(),
                     api.inventory.getNozzles(),
+                    api.users.getAll(selectedStationId),
                 ]);
                 setProducts(productsData.map(p => ({ id: p.id, code: p.code, name: p.name, price_per_liter: p.price_per_liter })));
                 setTanks(tanksData.map(t => ({ id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name ?? undefined, tank_type: t.tank_type ?? undefined, capacity_liters: t.capacity_liters })));
@@ -91,6 +122,12 @@ export default function AdminPage() {
                     product_name: n.product_name ?? undefined,
                     is_active: n.is_active,
                 } as any)));
+                setStationUsers(usersData);
+                const owner = usersData.find(u => u.role === 'owner') || null;
+                setOwnerUser(owner);
+                // Reset password form state when switching stations
+                setResetPassword('');
+                setResetPasswordSuccess('');
             } catch (err) {
                 console.error('Failed to fetch config data:', err);
             } finally {
@@ -202,7 +239,45 @@ export default function AdminPage() {
         setSelectedStationId(id);
         setIsConfirmingEnable(false);
         setSupportReason('');
+        // Load station details for editing
+        const station = stations.find(s => s.id === id);
+        if (station) {
+            setStationDetails({
+                name: station.name || '',
+                address: '',
+                phone: '',
+                email: station.owner || '',
+                status: (station.status?.toLowerCase() || 'active') as 'setup' | 'active' | 'suspended' | 'archived',
+            });
+        }
     }
+
+    // Onboard new station handler
+    const handleOnboardStation = async () => {
+        if (!newStation.name.trim() || !newStation.owner_email.trim()) {
+            alert('Station name and owner email are required.');
+            return;
+        }
+
+        setIsOnboarding(true);
+        try {
+            await api.admin.createStation({
+                name: newStation.name,
+                owner_email: newStation.owner_email,
+                address: newStation.address || undefined,
+                phone: newStation.phone || undefined,
+            });
+            // Refresh stations list
+            mutate('/admin/stations');
+            setNewStation({ name: '', owner_email: '', address: '', phone: '' });
+            setShowOnboardModal(false);
+            alert('Station onboarded successfully!');
+        } catch (err: any) {
+            alert(`Failed to onboard station: ${err.message || err.detail || 'Unknown error'}`);
+        } finally {
+            setIsOnboarding(false);
+        }
+    };
 
     // Refresh config data
     const refreshConfigData = async () => {
@@ -516,6 +591,12 @@ export default function AdminPage() {
 
                         {/* Tabs */}
                         <div className="flex gap-1 mb-6 border-b">
+                            <button
+                                onClick={() => setConfigTab('details')}
+                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${configTab === 'details' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Station Details
+                            </button>
                             {(['products', 'tanks', 'nozzles'] as const).map((tab) => (
                                 <button
                                     key={tab}
@@ -529,6 +610,289 @@ export default function AdminPage() {
                                 </button>
                             ))}
                         </div>
+
+                        {/* Station Details Tab */}
+                        {configTab === 'details' && (
+                            <div className="space-y-6">
+                                {/* System Admin Actions */}
+                                {currentUser?.role === 'system_admin' && (
+                                    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 mb-6 flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-sm font-medium text-indigo-900">System Access</h3>
+                                            <p className="text-xs text-indigo-700 mt-1">
+                                                Assign yourself to this station to access its dashboard and sales data.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                if (!confirm('This will assign you to this station and redirect to the dashboard. Continue?')) return;
+                                                setIsAssigningMyStation(true);
+                                                try {
+                                                    await api.users.assignStation(currentUser.user_id, selectedStation.id, 'owner');
+                                                    router.push('/dashboard');
+                                                } catch (err: any) {
+                                                    alert('Failed to assign station: ' + (err.message || 'Unknown error'));
+                                                    setIsAssigningMyStation(false);
+                                                }
+                                            }}
+                                            disabled={isAssigningMyStation}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                                        >
+                                            {isAssigningMyStation ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <ArrowRightCircle className="h-4 w-4" />
+                                            )}
+                                            Access Dashboard
+                                        </button>
+                                    </div>
+                                )}
+
+                                <p className="text-sm text-slate-500">Edit station information and contact details</p>
+
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Station Name</label>
+                                        <input
+                                            type="text"
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                            value={stationDetails.name}
+                                            onChange={(e) => setStationDetails(s => ({ ...s, name: e.target.value }))}
+                                            placeholder="Station name"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                                        <input
+                                            type="email"
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                            value={stationDetails.email}
+                                            onChange={(e) => setStationDetails(s => ({ ...s, email: e.target.value }))}
+                                            placeholder="station@example.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                                        <input
+                                            type="tel"
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                            value={stationDetails.phone}
+                                            onChange={(e) => setStationDetails(s => ({ ...s, phone: e.target.value }))}
+                                            placeholder="+94 XX XXX XXXX"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                                        <input
+                                            type="text"
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                            value={stationDetails.address}
+                                            onChange={(e) => setStationDetails(s => ({ ...s, address: e.target.value }))}
+                                            placeholder="Street address, City"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                                        <select
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                            value={stationDetails.status}
+                                            onChange={(e) => setStationDetails(s => ({ ...s, status: e.target.value as any }))}
+                                        >
+                                            <option value="setup">Setup</option>
+                                            <option value="active">Active</option>
+                                            <option value="suspended">Suspended</option>
+                                            <option value="archived">Archived</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t flex justify-end gap-3">
+                                    <button
+                                        onClick={() => {
+                                            if (selectedStation) {
+                                                setStationDetails({
+                                                    name: selectedStation.name || '',
+                                                    address: '',
+                                                    phone: '',
+                                                    email: selectedStation.owner || '',
+                                                    status: (selectedStation.status?.toLowerCase() || 'active') as any,
+                                                });
+                                            }
+                                        }}
+                                        className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                                    >
+                                        Reset
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            if (!stationDetails.name.trim()) {
+                                                alert('Station name is required');
+                                                return;
+                                            }
+                                            setIsSavingDetails(true);
+                                            setSaveSuccess(false);
+                                            try {
+                                                await api.admin.updateStation(selectedStationId, {
+                                                    name: stationDetails.name,
+                                                    address: stationDetails.address || undefined,
+                                                    phone: stationDetails.phone || undefined,
+                                                    email: stationDetails.email || undefined,
+                                                    status: stationDetails.status,
+                                                });
+                                                mutate('/admin/stations');
+                                                setSaveSuccess(true);
+                                                setTimeout(() => setSaveSuccess(false), 3000);
+                                            } catch (err: any) {
+                                                alert(`Failed to save: ${err.message || err.detail || 'Unknown error'}`);
+                                            } finally {
+                                                setIsSavingDetails(false);
+                                            }
+                                        }}
+                                        disabled={isSavingDetails}
+                                        className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        {isSavingDetails ? 'Saving...' : 'Save Changes'}
+                                    </button>
+                                    {saveSuccess && (
+                                        <span className="text-green-600 text-sm font-medium flex items-center gap-1">
+                                            ✓ Saved!
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Owner Management Section */}
+                                {ownerUser ? (
+                                    <div className="pt-6 border-t">
+                                        <h3 className="text-md font-semibold text-slate-800 mb-4">Owner Credentials</h3>
+                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4">
+                                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-slate-500 uppercase">Owner Name</label>
+                                                    <div className="text-sm font-medium text-slate-900">{ownerUser.full_name || 'N/A'}</div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-slate-500 uppercase">Owner Email</label>
+                                                    <div className="text-sm font-medium text-slate-900">{ownerUser.email}</div>
+                                                </div>
+                                            </div>
+
+                                            <div className="border-t border-slate-200 pt-4 mt-2">
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">Reset Password</label>
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="text"
+                                                        className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                        value={resetPassword}
+                                                        onChange={(e) => setResetPassword(e.target.value)}
+                                                        placeholder="Enter new password"
+                                                    />
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!resetPassword.trim()) {
+                                                                alert('Password is required');
+                                                                return;
+                                                            }
+                                                            setIsResettingPassword(true);
+                                                            setResetPasswordSuccess('');
+                                                            try {
+                                                                await api.users.updatePassword(ownerUser.id, resetPassword);
+                                                                setResetPasswordSuccess('Password updated successfully');
+                                                                setResetPassword('');
+                                                                setTimeout(() => setResetPasswordSuccess(''), 5000);
+                                                            } catch (err: any) {
+                                                                alert(`Failed to reset password: ${err.message || err.detail || 'Unknown error'}`);
+                                                            } finally {
+                                                                setIsResettingPassword(false);
+                                                            }
+                                                        }}
+                                                        disabled={isResettingPassword}
+                                                        className="px-4 py-2 text-sm font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                                                    >
+                                                        {isResettingPassword ? 'Updating...' : 'Update Password'}
+                                                    </button>
+                                                </div>
+                                                {resetPasswordSuccess && (
+                                                    <div className="mt-2 text-green-600 text-sm font-medium">
+                                                        ✓ {resetPasswordSuccess}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="pt-6 border-t">
+                                        <h3 className="text-md font-semibold text-slate-800 mb-4">Invite Owner</h3>
+                                        <p className="text-sm text-slate-500 mb-4">Create a new owner account for this station</p>
+
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+                                                <input
+                                                    type="email"
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                    value={inviteEmail}
+                                                    onChange={(e) => setInviteEmail(e.target.value)}
+                                                    placeholder="owner@example.com"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                    value={inviteFullName}
+                                                    onChange={(e) => setInviteFullName(e.target.value)}
+                                                    placeholder="John Doe"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={async () => {
+                                                    if (!inviteEmail.trim()) {
+                                                        alert('Email is required');
+                                                        return;
+                                                    }
+                                                    setIsInviting(true);
+                                                    setInviteSuccess('');
+                                                    try {
+                                                        await api.admin.inviteUser({
+                                                            email: inviteEmail,
+                                                            full_name: inviteFullName || undefined,
+                                                            role: 'owner',
+                                                            station_id: selectedStationId,
+                                                        });
+                                                        setInviteSuccess(`Owner created for ${inviteEmail}!`);
+                                                        setInviteEmail('');
+                                                        setInviteFullName('');
+                                                        // Refresh users list to show the new owner immediately
+                                                        const users = await api.users.getAll(selectedStationId);
+                                                        setStationUsers(users);
+                                                        setOwnerUser(users.find(u => u.role === 'owner') || null);
+
+                                                        setTimeout(() => setInviteSuccess(''), 5000);
+                                                    } catch (err: any) {
+                                                        alert(`Failed to invite: ${err.message || err.detail || 'Unknown error'}`);
+                                                    } finally {
+                                                        setIsInviting(false);
+                                                    }
+                                                }}
+                                                disabled={isInviting}
+                                                className="px-4 py-2 text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                                            >
+                                                {isInviting ? 'Creating...' : 'Create Owner'}
+                                            </button>
+                                            {inviteSuccess && (
+                                                <span className="text-green-600 text-sm font-medium">
+                                                    ✓ {inviteSuccess}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Products Tab */}
                         {configTab === 'products' && (
@@ -873,7 +1237,10 @@ export default function AdminPage() {
                 <section>
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-slate-800">Registered Stations</h2>
-                        <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <button
+                            onClick={() => setShowOnboardModal(true)}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
                             + Onboard New Station
                         </button>
                     </div>
@@ -881,6 +1248,78 @@ export default function AdminPage() {
                 </section>
 
             </main>
+
+            {/* Onboard Station Modal */}
+            {showOnboardModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+                        <div className="bg-indigo-600 px-6 py-4">
+                            <h3 className="text-lg font-semibold text-white">Onboard New Station</h3>
+                            <p className="text-sm text-indigo-200">Create a new station and send owner invite</p>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Station Name *</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g., Central Fuel Station"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    value={newStation.name}
+                                    onChange={(e) => setNewStation(s => ({ ...s, name: e.target.value }))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Owner Email *</label>
+                                <input
+                                    type="email"
+                                    placeholder="owner@example.com"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    value={newStation.owner_email}
+                                    onChange={(e) => setNewStation(s => ({ ...s, owner_email: e.target.value }))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                                <input
+                                    type="text"
+                                    placeholder="Street address"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    value={newStation.address}
+                                    onChange={(e) => setNewStation(s => ({ ...s, address: e.target.value }))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                                <input
+                                    type="tel"
+                                    placeholder="+94 XX XXX XXXX"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    value={newStation.phone}
+                                    onChange={(e) => setNewStation(s => ({ ...s, phone: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 px-6 py-4 flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowOnboardModal(false);
+                                    setNewStation({ name: '', owner_email: '', address: '', phone: '' });
+                                }}
+                                className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleOnboardStation}
+                                disabled={isOnboarding}
+                                className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isOnboarding ? 'Creating...' : 'Create Station'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Delete Confirmation Dialog */}
             <ConfirmDialog
