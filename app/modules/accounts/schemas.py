@@ -92,3 +92,40 @@ class TransactionRead(BaseModel):
 class TransactionWithBalance(TransactionRead):
     """Transaction with updated balance."""
     new_balance: Decimal
+
+
+# ============================================================================
+# Bank Account Schemas
+# ============================================================================
+
+class BankAccountBase(BaseModel):
+    """Base bank account schema."""
+    bank_name: str
+    account_number: str
+    account_name: str
+    branch: str | None = None
+
+
+class BankAccountCreate(BankAccountBase):
+    """Schema for creating a bank account."""
+    pass
+
+
+class BankAccountUpdate(BaseModel):
+    """Schema for updating a bank account."""
+    bank_name: str | None = None
+    account_number: str | None = None
+    account_name: str | None = None
+    branch: str | None = None
+    is_active: bool | None = None
+
+
+class BankAccountRead(BankAccountBase):
+    """Bank account response schema."""
+    id: UUID
+    station_id: UUID
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = {"from_attributes": True}
