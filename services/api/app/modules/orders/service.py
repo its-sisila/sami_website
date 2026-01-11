@@ -5,7 +5,7 @@ CRUD operations for fuel orders, deliveries, and regulatory returns.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time as dt_time
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -18,6 +18,20 @@ from app.modules.orders.schemas import (
     RegulatoryReturnCreate,
 )
 from app.modules.inventory.models import Tank, FuelDelivery
+
+
+def parse_time_string(time_str: str | None) -> dt_time | None:
+    """Parse HH:MM or HH:MM:SS time string to Python time object."""
+    if not time_str:
+        return None
+    try:
+        parts = time_str.split(':')
+        hour = int(parts[0])
+        minute = int(parts[1]) if len(parts) > 1 else 0
+        second = int(parts[2]) if len(parts) > 2 else 0
+        return dt_time(hour, minute, second)
+    except (ValueError, IndexError):
+        return None
 
 
 # ============================================================================
@@ -78,6 +92,9 @@ async def update_fuel_order(
     """Update a fuel order."""
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
+        # Convert timezone-aware datetimes to naive (UTC) for database compatibility
+        if isinstance(value, datetime) and value.tzinfo is not None:
+            value = value.replace(tzinfo=None)
         setattr(order, field, value)
     await db.flush()
     return order
@@ -121,7 +138,7 @@ async def create_delivery(
         order_id=data.order_id,
         liters_received=data.liters_received,
         delivery_date=data.delivery_date or date.today(),
-        delivery_time=data.delivery_time,
+        delivery_time=parse_time_string(data.delivery_time),
         delivery_slip_number=data.delivery_slip_number,
         vehicle_number=data.vehicle_number,
         driver_name=data.driver_name,
