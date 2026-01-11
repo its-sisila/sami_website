@@ -20,6 +20,7 @@ from app.modules.employees.schemas import (
     BulkAttendanceCreate, AttendanceRead,
     PayrollResponse,
     AdvancePaymentCreate, AdvancePaymentRead,
+    PayrollPaymentCreate, PayrollPaymentRead,
 )
 from app.modules.admin.service import log_audit
 
@@ -293,6 +294,28 @@ async def get_payroll(
     station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     payroll = await service.calculate_payroll(station_id, start_date, end_date, db)
     return payroll
+
+
+@router.post("/payroll/pay", response_model=PayrollPaymentRead, status_code=status.HTTP_201_CREATED)
+async def record_payroll_payment(
+    data: PayrollPaymentCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Record a payroll payment for an employee. Requires owner, manager, accountant, or system_admin role."""
+    if current_user.role not in ("owner", "manager", "accountant", "system_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only owners, managers, accountants, and system admins can record payroll payments",
+        )
+    
+    paid_by = UUID(current_user.user_id) if current_user.user_id else None
+    
+    try:
+        payment = await service.record_payroll_payment(data, paid_by, db)
+        return payment
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================================================
