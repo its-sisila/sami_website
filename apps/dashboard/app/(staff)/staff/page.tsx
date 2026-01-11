@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { mutate } from "swr"
 import {
     Table,
     TableBody,
@@ -33,7 +34,19 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Edit, UserX, UserCheck, Plus, Clock, ArrowRight, Info, Eye, X, Save, LogOut } from "lucide-react"
+import { Edit, UserX, UserCheck, Plus, Clock, ArrowRight, Info, Eye, X, Save, LogOut, Loader2, Download, Play, Square } from "lucide-react"
+import { useEmployees, useMonthlyAttendance, usePayroll, useAdvances, useShifts, useDailyAttendance, useUsers } from "@/lib/hooks"
+import { useSales } from "@/lib/hooks/use-sales"
+import { api } from "@/lib/api/client"
+import type { ShiftType } from "@/lib/api/types"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog"
 
 // --- Mock Data ---
 
@@ -141,76 +154,10 @@ type AttendanceStatus = "Present" | "Absent" | "Half-Day" | "Overtime"
 // Mock Attendance for a month (1-31)
 const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1)
 
-// Helper to generate randomish attendance
-const getMockAttendance = (empId: string) => {
-    // Just deterministic mock based on ID char
-    const code = empId.charCodeAt(3)
-    return DAYS_OF_MONTH.map((day, i) => {
-        if ((code + i) % 7 === 0) return "Absent"
-        if ((code + i) % 5 === 0) return "Half-Day"
-        if ((code + i) % 6 === 0) return "Overtime"
-        return "Present"
-    }) as AttendanceStatus[]
-}
-
-const ATTENDANCE_DATA = EMPLOYEES.filter(e => e.status === "Active").map(e => ({
-    employeeId: e.id,
-    employeeName: e.nameWithInitials,
-    attendance: getMockAttendance(e.id)
-}))
 
 
-// --- Mock Payroll Details Data ---
 
-interface AdvanceRecord {
-    id: string
-    date: string
-    time: string
-    amount: number
-}
-
-interface ShiftLog {
-    id: string
-    date: string
-    shift: "Day" | "Night"
-    status: AttendanceStatus
-    hours: number
-}
-
-// Generate deterministic mock logs
-const getMockAdvanceHistory = (empId: string, totalAmount: number): AdvanceRecord[] => {
-    if (totalAmount === 0) return []
-    // Split total into random chunks
-    const count = Math.ceil(totalAmount / 1000)
-    const records: AdvanceRecord[] = []
-    let remaining = totalAmount
-    for (let i = 0; i < count; i++) {
-        const amount = i === count - 1 ? remaining : 1000
-        remaining -= amount
-        records.push({
-            id: `ADV-${empId}-${i}`,
-            date: new Date(new Date().setDate(new Date().getDate() - (i * 3 + 1))).toISOString().split('T')[0],
-            time: "10:30 AM",
-            amount
-        })
-    }
-    return records
-}
-
-const getMockShiftHistory = (empId: string, attendance: AttendanceStatus[]): ShiftLog[] => {
-    const today = new Date()
-    return attendance.map((status, i) => {
-        const date = new Date(today)
-        date.setDate(today.getDate() - (6 - i)) // Back from Sunday? Or simplistic relative
-        return {
-            id: `SH-${empId}-${i}`,
-            date: date.toISOString().split('T')[0],
-            shift: (i % 2 === 0 ? "Day" : "Night") as "Day" | "Night",
-            status: status,
-            hours: status === "Present" ? 12 : status === "Half-Day" ? 6 : status === "Overtime" ? 14 : 0
-        }
-    }).filter(s => s.status !== "Absent")
-}
+// --- Components ---
 
 // --- Components ---
 
@@ -257,9 +204,114 @@ export default function StaffPage() {
     const [viewingEmployee, setViewingEmployee] = React.useState<Employee | null>(null)
     const [payrollViewingEmp, setPayrollViewingEmp] = React.useState<string | null>(null) // ID of employee viewing payroll
 
+    // Payment Dialog State
+    const [paymentDialogOpen, setPaymentDialogOpen] = React.useState(false)
+    const [paymentDialogData, setPaymentDialogData] = React.useState<{
+        employee_id: string;
+        employee_name: string;
+        gross_wage: number;
+        total_advances: number;
+        net_payable: number;
+    } | null>(null)
+    const [paymentNotes, setPaymentNotes] = React.useState('')
+    const [paymentDateTime, setPaymentDateTime] = React.useState(new Date().toISOString().slice(0, 16))
+    const [paymentPaidBy, setPaymentPaidBy] = React.useState('')
+    const [isSubmittingPayment, setIsSubmittingPayment] = React.useState(false)
+
+    // API Hook for users (for paid_by dropdown)
+    const { data: usersData } = useUsers()
+
     // State for Daily Shifts
     const [shiftDate, setShiftDate] = React.useState<string>(new Date().toISOString().split('T')[0])
     const [shiftType, setShiftType] = React.useState<string>("Day")
+
+    // State for Monthly Attendance
+    const [selectedMonth, setSelectedMonth] = React.useState<number>(new Date().getMonth() + 1)
+    const [selectedYear, setSelectedYear] = React.useState<number>(new Date().getFullYear())
+
+    // API Hook for monthly attendance
+    const {
+        data: monthlyAttendanceData,
+        isLoading: isLoadingMonthlyAttendance,
+        error: monthlyAttendanceError,
+    } = useMonthlyAttendance(selectedYear, selectedMonth)
+
+    // State for Payroll (default to current month)
+    const getMonthDateRange = (year: number, month: number) => {
+        const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+        const lastDay = new Date(year, month, 0).getDate()
+        const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        return { startDate, endDate }
+    }
+    const [payrollMonth, setPayrollMonth] = React.useState<number>(new Date().getMonth() + 1)
+    const [payrollYear, setPayrollYear] = React.useState<number>(new Date().getFullYear())
+    const { startDate: payrollStartDate, endDate: payrollEndDate } = getMonthDateRange(payrollYear, payrollMonth)
+
+    // API Hook for payroll
+    const {
+        data: payrollData,
+        isLoading: isLoadingPayroll,
+        error: payrollError,
+    } = usePayroll(payrollStartDate, payrollEndDate)
+
+    // API Hook for advance payments (for payroll details modal)
+    const {
+        data: advancesData,
+        isLoading: isLoadingAdvances,
+    } = useAdvances(payrollViewingEmp)
+
+    // API Hook for shift history (for payroll details modal)
+    const {
+        data: shiftsData,
+        isLoading: isLoadingShifts,
+    } = useShifts(payrollViewingEmp)
+
+    // API Hook for shift management
+    const {
+        currentShift,
+        isLoading: isShiftLoading,
+        error: shiftError,
+        hasActiveShift,
+        startShift,
+        endShift,
+        clearError,
+    } = useSales()
+
+    // Sync shift state from API
+    React.useEffect(() => {
+        if (currentShift) {
+            setShiftType(currentShift.shift_type === 'day' ? 'Day' : 'Night')
+            setShiftDate(currentShift.shift_date)
+        }
+    }, [currentShift])
+
+    // Handle starting a new shift
+    const handleStartShift = async () => {
+        try {
+            const shiftTypeApi: ShiftType = shiftType === 'Day' ? 'day' : 'night'
+            await startShift(shiftTypeApi, shiftDate)
+        } catch (err: any) {
+            alert(`Failed to start shift: ${err.message}`)
+        }
+    }
+
+    // Handle ending the current shift
+    const handleEndShift = async () => {
+        console.log('[handleEndShift] called, hasActiveShift:', hasActiveShift, 'currentShift:', currentShift)
+        if (!hasActiveShift) {
+            console.log('[handleEndShift] No active shift, returning early')
+            return
+        }
+
+        console.log('[handleEndShift] Calling endShift API...')
+        try {
+            await endShift()
+            console.log('[handleEndShift] Shift closed successfully')
+        } catch (err: any) {
+            console.error('[handleEndShift] Error:', err)
+            alert(`Failed to close shift: ${err.message}`)
+        }
+    }
 
     // Default manual time input state
     const getCurrentTime = () => {
@@ -269,15 +321,65 @@ export default function StaffPage() {
     const [manualTimeInputs, setManualTimeInputs] = React.useState<Record<string, string>>({})
     const [manualTimeOuts, setManualTimeOuts] = React.useState<Record<string, string>>({})
 
-    const [presentEmployees, setPresentEmployees] = React.useState<AttendanceRecord[]>([
-        { id: "E002", timeIn: "07:15", markedAt: new Date(new Date().setHours(7, 16)) },
-        { id: "E005", timeIn: "07:00", markedAt: new Date(new Date().setHours(7, 5)) }
-    ])
+    const [presentEmployees, setPresentEmployees] = React.useState<AttendanceRecord[]>([])
+
+    // Fetch daily attendance
+    const { data: apiAttendance, mutate: mutateAttendance } = useDailyAttendance(shiftDate)
+
+    // Sync API attendance to local state
+    React.useEffect(() => {
+        if (apiAttendance) {
+            const mapped = apiAttendance.map(record => ({
+                id: record.employee_id,
+                timeIn: record.time_in ? record.time_in.slice(0, 5) : "",
+                markedAt: new Date(record.created_at),
+                timeOut: record.time_out ? record.time_out.slice(0, 5) : undefined,
+                markedOutAt: record.time_out ? new Date(record.created_at) : undefined // Approx
+            }))
+            setPresentEmployees(mapped)
+        }
+    }, [apiAttendance])
 
     const [nextShiftEmployees, setNextShiftEmployees] = React.useState<string[]>([])
 
+    // Fetch real employee data from API
+    const { data: apiEmployees, error: employeesError, isLoading: employeesLoading } = useEmployees()
+
+    // Map API data to local format, fallback to mock data
+    const mappedApiEmployees = React.useMemo((): Employee[] => {
+        if (apiEmployees && apiEmployees.length > 0) {
+            return apiEmployees.map(emp => ({
+                id: emp.id,
+                fullName: emp.full_name,
+                nameWithInitials: emp.name_with_initials || emp.full_name.split(' ').map((n, i) => i === 0 ? n.charAt(0) + '.' : n).join(' '),
+                nic: emp.nic || '',
+                address: emp.address || '',
+                phone: emp.phone || '',
+                role: (emp.role === 'staff' ? 'Staff' : 'Pumper') as EmployeeRole,
+                joinedDate: emp.joined_date || '',
+                gender: (emp.gender === 'male' ? 'Male' : emp.gender === 'female' ? 'Female' : 'Male') as Gender,
+                dob: emp.date_of_birth || '',
+                dailyWage: emp.daily_wage,
+                status: (emp.is_active ? 'Active' : 'Inactive') as EmployeeStatus,
+                advancesTaken: 0 // No API field for this yet
+            }))
+        }
+        // Fallback to mock data for development (only if DISABLE_MOCK_DATA is false)
+        if (process.env.NEXT_PUBLIC_DISABLE_MOCK_DATA === 'true') {
+            return []
+        }
+        return EMPLOYEES
+    }, [apiEmployees])
+
     // Data State (Mocking mutation)
     const [employees, setEmployees] = React.useState<Employee[]>(EMPLOYEES)
+
+    // Update employees when API data changes
+    React.useEffect(() => {
+        if (mappedApiEmployees.length > 0) {
+            setEmployees(mappedApiEmployees)
+        }
+    }, [mappedApiEmployees])
 
     const handleManualTimeChange = (id: string, value: string) => {
         setManualTimeInputs(prev => ({ ...prev, [id]: value }))
@@ -286,77 +388,145 @@ export default function StaffPage() {
         setManualTimeOuts(prev => ({ ...prev, [id]: value }))
     }
 
-    const togglePresent = (id: string) => {
-        setPresentEmployees(prev => {
-            const exists = prev.find(p => p.id === id)
-            if (exists) {
-                // If checking out (removing), we might want to prevent accidental removal, but keeping it simple as "Mark Out" logic is separate now maybe?
-                // Actually existing logic was toggle. Let's keep toggle for Mark In/Cancel.
-                return prev.filter(p => p.id !== id)
-            } else {
-                const timeIn = manualTimeInputs[id] || getCurrentTime()
-                return [...prev, { id, timeIn, markedAt: new Date() }]
+    const togglePresent = async (id: string) => {
+        const exists = presentEmployees.find(p => p.id === id)
+
+        if (exists) {
+            // Remove from local state (unmark)
+            setPresentEmployees(prev => prev.filter(p => p.id !== id))
+        } else {
+            // Mark as present
+            const timeIn = manualTimeInputs[id] || getCurrentTime()
+
+            // Update local state immediately for responsiveness
+            setPresentEmployees(prev => [...prev, { id, timeIn, markedAt: new Date() }])
+
+            // Only call API if this is a real UUID (not mock data like "E001")
+            const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+            if (!isValidUUID) {
+                console.log('[togglePresent] Skipping API call for mock employee:', id)
+                return
             }
-        })
+
+            // Call API to persist
+            try {
+                await api.employees.markAttendance({
+                    attendance_date: shiftDate,
+                    shift_id: currentShift?.id || undefined,
+                    entries: [{
+                        employee_id: id,
+                        status: 'present',
+                        time_in: timeIn,
+                    }]
+                })
+                console.log('[togglePresent] Marked attendance for', id)
+                mutateAttendance() // Refresh list
+            } catch (err: any) {
+                console.error('[togglePresent] API error:', err)
+                // Revert local state on error
+                setPresentEmployees(prev => prev.filter(p => p.id !== id))
+                const errorMsg = err.detail || err.message || 'Unknown error'
+                alert(`Failed to mark attendance: ${errorMsg}`)
+            }
+        }
     }
 
-    const markShiftEnd = (id: string) => {
-        setPresentEmployees(prev => {
-            return prev.map(p => {
-                if (p.id === id) {
-                    const timeOut = manualTimeOuts[id] || getCurrentTime()
-                    return { ...p, timeOut, markedOutAt: new Date() }
-                }
-                return p
+    const markShiftEnd = async (id: string) => {
+        const timeOut = manualTimeOuts[id] || getCurrentTime()
+
+        // Update local state immediately
+        setPresentEmployees(prev => prev.map(p =>
+            p.id === id ? { ...p, timeOut, markedOutAt: new Date() } : p
+        ))
+
+        // Only call API if this is a real UUID (not mock data)
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        if (!isValidUUID) {
+            console.log('[markShiftEnd] Skipping API call for mock employee:', id)
+            return
+        }
+
+        // Call API to persist time_out
+        try {
+            await api.employees.markAttendance({
+                attendance_date: shiftDate,
+                shift_id: currentShift?.id || undefined,
+                entries: [{
+                    employee_id: id,
+                    status: 'present',
+                    time_out: timeOut,
+                }]
             })
-        })
+            console.log('[markShiftEnd] Marked time_out for', id)
+            mutateAttendance() // Refresh list
+        } catch (err: any) {
+            console.error('[markShiftEnd] API error:', err)
+            // Revert local state on error
+            setPresentEmployees(prev => prev.map(p =>
+                p.id === id ? { ...p, timeOut: undefined, markedOutAt: undefined } : p
+            ))
+            const errorMsg = err.detail || err.message || 'Unknown error'
+            alert(`Failed to end shift: ${errorMsg}`)
+        }
     }
 
-    const toggleNextShift = (id: string) => {
-        setNextShiftEmployees(prev =>
-            prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
-        )
-    }
+
+
+
+
 
     const activeEmployees = employees.filter(e => e.status === "Active")
 
-    // Form Handling (Mock)
-    const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    // Form submission state
+    const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+
+
+
+    // Form Handling - Wired to API
+    const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         const formData = new FormData(e.currentTarget)
 
-        const newEmployeeData = {
-            fullName: formData.get("fullName") as string,
-            nameWithInitials: formData.get("nameWithInitials") as string,
-            nic: formData.get("nic") as string,
-            address: formData.get("address") as string,
-            phone: formData.get("phone") as string,
-            role: formData.get("role") as EmployeeRole,
-            joinedDate: formData.get("joinedDate") as string,
-            gender: formData.get("gender") as Gender,
-            dob: formData.get("dob") as string,
-            // Assuming default if not present or handling number conversion carefully
-            dailyWage: 1500,
-            status: "Active" as EmployeeStatus,
-            advancesTaken: 0
+        const employeeData = {
+            full_name: formData.get("fullName") as string,
+            name_with_initials: formData.get("nameWithInitials") as string || null,
+            nic: formData.get("nic") as string || null,
+            address: formData.get("address") as string || null,
+            phone: formData.get("phone") as string || null,
+            role: (formData.get("role") as string)?.toLowerCase() === 'staff' ? 'staff' : 'pumper' as 'staff' | 'pumper',
+            joined_date: formData.get("joinedDate") as string || null,
+            gender: (formData.get("gender") as string)?.toLowerCase() || null,
+            date_of_birth: formData.get("dob") as string || null,
+            daily_wage: parseFloat(formData.get("dailyWage") as string) || 1500,
         }
 
-        if (editingEmployee) {
-            setEmployees(prev => prev.map(emp =>
-                emp.id === editingEmployee.id
-                    ? { ...emp, ...newEmployeeData, id: emp.id, dailyWage: emp.dailyWage, status: emp.status, advancesTaken: emp.advancesTaken } // Preserve some fields for valid mock update
-                    : emp
-            ))
-            alert("Employee updated (Mock)")
-        } else {
-            const newId = `E00${employees.length + 1}`
-            // @ts-ignore
-            setEmployees(prev => [...prev, { id: newId, ...newEmployeeData }])
-            alert("Employee added (Mock)")
-        }
+        setIsSubmitting(true)
+        try {
+            if (editingEmployee) {
+                // Update existing employee
+                await api.employees.update(editingEmployee.id, employeeData)
+                alert("Employee updated successfully")
+            } else {
+                // Create new employee
+                await api.employees.create(employeeData as any)
+                alert("Employee added successfully")
+            }
 
-        setIsFormOpen(false)
-        setEditingEmployee(null)
+            // Refresh employee list from API - trigger SWR revalidation
+
+            // Refresh employee list from API - trigger SWR revalidation
+            await mutate('/employees')
+            // Also invalidate active employees query if it exists in cache
+            mutate('/employees?active_only=true')
+
+            setIsFormOpen(false)
+            setEditingEmployee(null)
+        } catch (err: any) {
+            alert(`Failed to save employee: ${err.message || err.detail || "Unknown error"}`)
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const openAddForm = () => {
@@ -367,6 +537,16 @@ export default function StaffPage() {
     const openEditForm = (emp: Employee) => {
         setEditingEmployee(emp)
         setIsFormOpen(true)
+    }
+
+    // Loading state
+    if (employeesLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="mt-2 text-muted-foreground">Loading staff data...</p>
+            </div>
+        )
     }
 
     return (
@@ -503,76 +683,123 @@ export default function StaffPage() {
                 )}
             </Modal>
 
-            {/* Payroll Details Modal */}
-            <Modal isOpen={!!payrollViewingEmp} onClose={() => setPayrollViewingEmp(null)} title="Payroll Breakdown">
-                {payrollViewingEmp && (() => {
-                    const emp = employees.find(e => e.id === payrollViewingEmp)!
-                    const attendanceRecord = ATTENDANCE_DATA.find(r => r.employeeId === emp.id)!
-
-                    const advances = getMockAdvanceHistory(emp.id, emp.advancesTaken)
-                    const shifts = getMockShiftHistory(emp.id, attendanceRecord.attendance)
-
-                    return (
-                        <div className="space-y-8">
-                            <div>
-                                <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Advance Payments</h4>
-                                {advances.length > 0 ? (
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Date</TableHead>
-                                                <TableHead>Time</TableHead>
-                                                <TableHead className="text-right">Amount (LKR)</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {advances.map(record => (
-                                                <TableRow key={record.id}>
-                                                    <TableCell>{record.date}</TableCell>
-                                                    <TableCell>{record.time}</TableCell>
-                                                    <TableCell className="text-right font-medium text-red-500">-{record.amount}</TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                ) : (
-                                    <p className="text-sm text-center py-4 text-muted-foreground border rounded-md">No advance payments taken this period.</p>
-                                )}
+            {/* Payment Details Dialog */}
+            <Modal
+                isOpen={paymentDialogOpen}
+                onClose={() => setPaymentDialogOpen(false)}
+                title="Record Payment"
+            >
+                {paymentDialogData && (
+                    <div className="space-y-6">
+                        {/* Employee & Amount Info */}
+                        <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Employee</span>
+                                <span className="font-semibold">{paymentDialogData.employee_name}</span>
                             </div>
-
-                            <div>
-                                <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Work History (Current Period)</h4>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Shift</TableHead>
-                                            <TableHead>Duration</TableHead>
-                                            <TableHead className="text-right">Status</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {shifts.map(log => (
-                                            <TableRow key={log.id}>
-                                                <TableCell>{log.date}</TableCell>
-                                                <TableCell>{log.shift}</TableCell>
-                                                <TableCell>{log.hours} Hrs</TableCell>
-                                                <TableCell className="text-right">
-                                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
-                                                        ${log.status === 'Present' ? 'bg-green-100 text-green-700' :
-                                                            log.status === 'Overtime' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                        {log.status}
-                                                    </span>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Period</span>
+                                <span className="text-sm">{payrollStartDate} to {payrollEndDate}</span>
+                            </div>
+                            <hr className="border-border" />
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Gross Wage</span>
+                                <span>LKR {paymentDialogData.gross_wage.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Advances Deducted</span>
+                                <span className="text-red-500">-LKR {paymentDialogData.total_advances.toLocaleString()}</span>
+                            </div>
+                            <hr className="border-border" />
+                            <div className="flex justify-between items-center text-lg font-bold">
+                                <span>Net Amount</span>
+                                <span className="text-green-600">LKR {paymentDialogData.net_payable.toLocaleString()}</span>
                             </div>
                         </div>
-                    )
-                })()}
+
+                        {/* Payment Date/Time */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="paymentDateTime">Payment Date & Time</Label>
+                            <Input
+                                id="paymentDateTime"
+                                type="datetime-local"
+                                value={paymentDateTime}
+                                onChange={(e) => setPaymentDateTime(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Paid By */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="paymentPaidBy">Paid By</Label>
+                            <Input
+                                id="paymentPaidBy"
+                                type="text"
+                                placeholder="e.g., Name (Accountant)"
+                                value={paymentPaidBy}
+                                onChange={(e) => setPaymentPaidBy(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Notes */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="paymentNotes">Notes (optional)</Label>
+                            <textarea
+                                id="paymentNotes"
+                                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                placeholder="e.g., Paid via bank transfer, receipt #123"
+                                value={paymentNotes}
+                                onChange={(e) => setPaymentNotes(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex justify-end gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={() => setPaymentDialogOpen(false)}
+                                disabled={isSubmittingPayment}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={async () => {
+                                    if (!payrollData || !paymentDialogData) return;
+                                    setIsSubmittingPayment(true);
+                                    try {
+                                        await api.employees.recordPayrollPayment({
+                                            employee_id: paymentDialogData.employee_id,
+                                            period_start: payrollData.start_date,
+                                            period_end: payrollData.end_date,
+                                            gross_amount: paymentDialogData.gross_wage,
+                                            advances_deducted: paymentDialogData.total_advances,
+                                            net_amount: paymentDialogData.net_payable,
+                                            paid_by: paymentPaidBy || undefined,
+                                            notes: paymentNotes || undefined,
+                                        });
+                                        // Refresh payroll data
+                                        mutate(`/employees/payroll?start=${payrollData.start_date}&end=${payrollData.end_date}`);
+                                        setPaymentDialogOpen(false);
+                                    } catch (err) {
+                                        console.error('Failed to record payment:', err);
+                                        alert('Failed to record payment. Please try again.');
+                                    } finally {
+                                        setIsSubmittingPayment(false);
+                                    }
+                                }}
+                                disabled={isSubmittingPayment}
+                                className="bg-green-600 hover:bg-green-700"
+                            >
+                                {isSubmittingPayment ? (
+                                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Recording...</>
+                                ) : (
+                                    'Confirm Payment'
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Modal>
+
 
 
             {/* --- Main Content --- */}
@@ -580,6 +807,25 @@ export default function StaffPage() {
             <div className="flex items-center justify-between space-y-2">
                 <h2 className="text-3xl font-bold tracking-tight">Staff Management</h2>
                 <div className="flex items-center space-x-2">
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            const currentMonth = new Date().toISOString().slice(0, 7);
+                            api.exports.downloadAttendance(currentMonth)
+                                .catch(err => alert(`Export failed: ${err.message}`));
+                        }}
+                    >
+                        <Download className="mr-2 h-4 w-4" /> Export Attendance
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            api.exports.downloadEmployees()
+                                .catch(err => alert(`Export failed: ${err.message}`));
+                        }}
+                    >
+                        <Download className="mr-2 h-4 w-4" /> Export Employees
+                    </Button>
                     <Button onClick={openAddForm}>
                         <Plus className="mr-2 h-4 w-4" /> Add Employee
                     </Button>
@@ -610,7 +856,7 @@ export default function StaffPage() {
                                 </CardDescription>
 
                                 {/* Shift Configuration */}
-                                <div className="flex gap-4 mt-4 p-4 bg-muted/50 rounded-lg border">
+                                <div className="flex flex-wrap gap-4 mt-4 p-4 bg-muted/50 rounded-lg border items-end">
                                     <div className="grid w-full max-w-sm items-center gap-1.5">
                                         <Label htmlFor="date">Date</Label>
                                         <Input
@@ -619,11 +865,12 @@ export default function StaffPage() {
                                             value={shiftDate}
                                             onChange={(e) => setShiftDate(e.target.value)}
                                             className="bg-background"
+                                            disabled={hasActiveShift}
                                         />
                                     </div>
                                     <div className="grid w-full max-w-sm items-center gap-1.5">
                                         <Label htmlFor="shift">Shift</Label>
-                                        <Select value={shiftType} onValueChange={setShiftType}>
+                                        <Select value={shiftType} onValueChange={setShiftType} disabled={hasActiveShift}>
                                             <SelectTrigger id="shift" className="bg-background">
                                                 <SelectValue placeholder="Select shift" />
                                             </SelectTrigger>
@@ -633,7 +880,59 @@ export default function StaffPage() {
                                             </SelectContent>
                                         </Select>
                                     </div>
+
+                                    {/* Start/End Shift Button */}
+                                    <div className="grid items-center gap-1.5">
+                                        <Label className="invisible">Action</Label>
+                                        {!hasActiveShift ? (
+                                            <Button
+                                                onClick={handleStartShift}
+                                                disabled={isShiftLoading}
+                                                className="bg-green-600 hover:bg-green-700 text-white"
+                                            >
+                                                {isShiftLoading ? (
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                ) : (
+                                                    <Play className="h-4 w-4 mr-2" />
+                                                )}
+                                                Start Shift
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                onClick={handleEndShift}
+                                                disabled={isShiftLoading}
+                                                variant="destructive"
+                                            >
+                                                {isShiftLoading ? (
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                ) : (
+                                                    <Square className="h-4 w-4 mr-2" />
+                                                )}
+                                                End Shift
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
+
+                                {/* Active Shift Indicator */}
+                                {hasActiveShift && currentShift && (
+                                    <div className="mt-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2 flex items-center gap-2">
+                                        <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                                        <span className="text-sm font-medium text-green-800">
+                                            Active: {currentShift.shift_type === 'day' ? 'Day' : 'Night'} shift on {currentShift.shift_date}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Error Display */}
+                                {shiftError && (
+                                    <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 flex items-center justify-between">
+                                        <span className="text-sm text-red-800">{shiftError}</span>
+                                        <button onClick={clearError} className="text-red-600 hover:text-red-800 text-sm underline">
+                                            Dismiss
+                                        </button>
+                                    </div>
+                                )}
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
@@ -668,6 +967,8 @@ export default function StaffPage() {
                                                                 size="sm"
                                                                 variant="outline"
                                                                 onClick={() => togglePresent(emp.id)}
+                                                                disabled={!hasActiveShift}
+                                                                title={!hasActiveShift ? 'Start a shift first' : ''}
                                                             >
                                                                 Mark Present
                                                             </Button>
@@ -688,6 +989,8 @@ export default function StaffPage() {
                                                                 variant="outline"
                                                                 className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                                                 onClick={() => markShiftEnd(emp.id)}
+                                                                disabled={!hasActiveShift}
+                                                                title={!hasActiveShift ? 'No active shift' : ''}
                                                             >
                                                                 End Shift
                                                             </Button>
@@ -740,44 +1043,7 @@ export default function StaffPage() {
                             </CardContent>
                         </Card>
 
-                        <div className="col-span-1 flex items-center justify-center">
-                            <ArrowRight className="h-8 w-8 text-muted-foreground hidden lg:block" />
-                        </div>
 
-                        <Card className="col-span-3">
-                            <CardHeader>
-                                <CardTitle>Next Shift Schedule</CardTitle>
-                                <CardDescription>
-                                    Assign staff for the upcoming shift.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    {activeEmployees.map(emp => {
-                                        const isScheduled = nextShiftEmployees.includes(emp.id)
-                                        return (
-                                            <div key={emp.id} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
-                                                <div className="flex items-center space-x-3">
-                                                    <Clock className={`w-4 h-4 ${isScheduled ? "text-blue-500" : "text-gray-300"}`} />
-                                                    <div>
-                                                        <p className="font-medium text-sm">{emp.nameWithInitials}</p>
-                                                        <p className="text-xs text-muted-foreground">{emp.role} • {emp.phone}</p>
-                                                    </div>
-                                                </div>
-                                                <Button
-                                                    size="sm"
-                                                    variant={isScheduled ? "default" : "outline"}
-                                                    onClick={() => toggleNextShift(emp.id)}
-                                                    className={isScheduled ? "bg-blue-600 hover:bg-blue-700" : ""}
-                                                >
-                                                    {isScheduled ? "Scheduled" : "Assign"}
-                                                </Button>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </CardContent>
-                        </Card>
                     </div>
                 </TabsContent>
 
@@ -786,61 +1052,212 @@ export default function StaffPage() {
                 <TabsContent value="attendance" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Attendance Grid</CardTitle>
-                            <CardDescription>
-                                Mark attendance for active employees.
-                            </CardDescription>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle>Monthly Attendance</CardTitle>
+                                    <CardDescription>
+                                        View attendance records from daily shifts
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="att-month" className="text-sm">Month:</Label>
+                                        <Select value={String(selectedMonth)} onValueChange={(v: string) => setSelectedMonth(Number(v))}>
+                                            <SelectTrigger id="att-month" className="w-[120px]">
+                                                <SelectValue placeholder="Month" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => (
+                                                    <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="att-year" className="text-sm">Year:</Label>
+                                        <Select value={String(selectedYear)} onValueChange={(v: string) => setSelectedYear(Number(v))}>
+                                            <SelectTrigger id="att-year" className="w-[100px]">
+                                                <SelectValue placeholder="Year" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {[2023, 2024, 2025, 2026].map(y => (
+                                                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {isLoadingMonthlyAttendance && (
+                                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                    )}
+                                </div>
+                            </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="rounded-md border">
+                            {monthlyAttendanceError && (
+                                <div className="text-red-500 text-sm mb-4">{monthlyAttendanceError}</div>
+                            )}
+                            <div className="overflow-x-auto rounded-md border">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="w-[200px]">Employee</TableHead>
+                                            <TableHead className="w-[180px] sticky left-0 bg-background z-10">Employee</TableHead>
                                             {DAYS_OF_MONTH.map(day => (
-                                                <TableHead key={day} className="text-center min-w-[50px]">{day}</TableHead>
+                                                <TableHead key={day} className="text-center min-w-[40px] px-1">{day}</TableHead>
                                             ))}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {ATTENDANCE_DATA.map((record) => (
-                                            <TableRow key={record.employeeId}>
-                                                <TableCell className="font-medium">{record.employeeName}</TableCell>
-                                                {record.attendance.map((status, index) => (
-                                                    <TableCell key={index} className="p-2">
-                                                        <Select defaultValue={status}>
-                                                            <SelectTrigger className="h-8 w-full min-w-[90px]">
-                                                                <SelectValue placeholder="Status" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="Present">
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                                                                        Present
-                                                                    </span>
-                                                                </SelectItem>
-                                                                <SelectItem value="Absent">
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
-                                                                        Absent
-                                                                    </span>
-                                                                </SelectItem>
-                                                                <SelectItem value="Half-Day">
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700">
-                                                                        Half-Day
-                                                                    </span>
-                                                                </SelectItem>
-                                                                <SelectItem value="Overtime">
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                                                                        Overtime
-                                                                    </span>
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </TableCell>
-                                                ))}
+                                        {isLoadingMonthlyAttendance ? (
+                                            <TableRow>
+                                                <TableCell colSpan={32} className="text-center py-8">
+                                                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
+                                                    <p className="text-sm text-muted-foreground mt-2">Loading attendance...</p>
+                                                </TableCell>
                                             </TableRow>
-                                        ))}
+                                        ) : monthlyAttendanceData && monthlyAttendanceData.length > 0 ? (
+                                            monthlyAttendanceData.map((record) => (
+                                                <TableRow key={record.employee_id}>
+                                                    <TableCell className="font-medium sticky left-0 bg-background z-10">{record.employee_name}</TableCell>
+                                                    {record.attendance.map((dayData, index) => {
+                                                        const status = dayData.status
+                                                        return (
+                                                            <TableCell key={index} className="p-1 text-center">
+                                                                {status ? (
+                                                                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium
+                                                                        ${status === 'present' ? 'bg-green-100 text-green-700' :
+                                                                            status === 'absent' ? 'bg-red-100 text-red-700' :
+                                                                                status === 'half_day' ? 'bg-yellow-100 text-yellow-700' :
+                                                                                    'bg-blue-100 text-blue-700'}`}
+                                                                        title={status}
+                                                                    >
+                                                                        {status === 'present' ? 'P' :
+                                                                            status === 'absent' ? 'A' :
+                                                                                status === 'half_day' ? 'H' : 'O'}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground">-</span>
+                                                                )}
+                                                            </TableCell>
+                                                        )
+                                                    })}
+                                                </TableRow>
+                                            ))
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={32} className="text-center py-8 text-muted-foreground">
+                                                    No attendance records for this month
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
                                     </TableBody>
                                 </Table>
+                            </div>
+                            <div className="flex gap-4 mt-4 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 text-green-700 font-medium">P</span>
+                                    Present
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-100 text-red-700 font-medium">A</span>
+                                    Absent
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-yellow-100 text-yellow-700 font-medium">H</span>
+                                    Half-Day
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-100 text-blue-700 font-medium">O</span>
+                                    Overtime
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Shift Count Chart */}
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle>Shift Leaderboard</CardTitle>
+                                    <CardDescription>
+                                        Employees ranked by number of shifts worked
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="chart-month" className="text-sm">Month:</Label>
+                                        <Select defaultValue={String(new Date().getMonth() + 1)}>
+                                            <SelectTrigger id="chart-month" className="w-[120px]">
+                                                <SelectValue placeholder="Month" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => (
+                                                    <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="chart-year" className="text-sm">Year:</Label>
+                                        <Select defaultValue={String(new Date().getFullYear())}>
+                                            <SelectTrigger id="chart-year" className="w-[100px]">
+                                                <SelectValue placeholder="Year" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {[2023, 2024, 2025].map(y => (
+                                                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                        data={(monthlyAttendanceData || []).map(record => ({
+                                            name: record.employee_name,
+                                            shifts: record.attendance.filter(d => d.status === 'present' || d.status === 'overtime').length +
+                                                record.attendance.filter(d => d.status === 'half_day').length * 0.5,
+                                            present: record.attendance.filter(d => d.status === 'present').length,
+                                            overtime: record.attendance.filter(d => d.status === 'overtime').length,
+                                            halfDay: record.attendance.filter(d => d.status === 'half_day').length,
+                                        })).sort((a, b) => b.shifts - a.shifts)}
+                                        layout="vertical"
+                                        margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis type="number" allowDecimals={false} />
+                                        <YAxis dataKey="name" type="category" width={70} fontSize={12} />
+                                        <Tooltip
+                                            formatter={(value: number, name: string) => [
+                                                value,
+                                                name === 'present' ? 'Present Days' :
+                                                    name === 'overtime' ? 'Overtime Days' :
+                                                        name === 'halfDay' ? 'Half Days' : 'Total Shifts'
+                                            ]}
+                                        />
+                                        <Bar dataKey="present" stackId="a" fill="#22c55e" name="present" />
+                                        <Bar dataKey="halfDay" stackId="a" fill="#eab308" name="halfDay" />
+                                        <Bar dataKey="overtime" stackId="a" fill="#3b82f6" name="overtime" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="flex gap-4 mt-4 text-xs text-muted-foreground justify-center">
+                                <div className="flex items-center gap-1">
+                                    <span className="w-3 h-3 rounded bg-green-500"></span>
+                                    Present
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="w-3 h-3 rounded bg-yellow-500"></span>
+                                    Half-Day
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="w-3 h-3 rounded bg-blue-500"></span>
+                                    Overtime
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -850,17 +1267,55 @@ export default function StaffPage() {
                 <TabsContent value="payroll" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Payroll (Estimated)</CardTitle>
-                            <CardDescription>
-                                Calculated wages based on current attendance records and advances.
-                            </CardDescription>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle>Payroll Summary</CardTitle>
+                                    <CardDescription>
+                                        Calculated wages based on attendance records and advances
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="payroll-month" className="text-sm">Month:</Label>
+                                        <Select value={String(payrollMonth)} onValueChange={(v: string) => setPayrollMonth(Number(v))}>
+                                            <SelectTrigger id="payroll-month" className="w-[120px]">
+                                                <SelectValue placeholder="Month" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => (
+                                                    <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="payroll-year" className="text-sm">Year:</Label>
+                                        <Select value={String(payrollYear)} onValueChange={(v: string) => setPayrollYear(Number(v))}>
+                                            <SelectTrigger id="payroll-year" className="w-[100px]">
+                                                <SelectValue placeholder="Year" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {[2023, 2024, 2025, 2026].map(y => (
+                                                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {isLoadingPayroll && (
+                                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                    )}
+                                </div>
+                            </div>
                         </CardHeader>
                         <CardContent>
+                            {payrollError && (
+                                <div className="text-red-500 text-sm mb-4">{payrollError.message}</div>
+                            )}
                             <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Employee</TableHead>
-                                        <TableHead className="text-right">Total Shifts</TableHead>
+                                        <TableHead className="text-right">Days Worked</TableHead>
                                         <TableHead className="text-right">Gross Wage</TableHead>
                                         <TableHead className="text-right text-red-500">Advances</TableHead>
                                         <TableHead className="text-right font-bold">Net Payout</TableHead>
@@ -868,39 +1323,97 @@ export default function StaffPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {ATTENDANCE_DATA.map((record) => {
-                                        const emp = employees.find(e => e.id === record.employeeId)!
-
-                                        const shifts = record.attendance.filter(s => s === "Present" || s === "Overtime").length + (record.attendance.filter(s => s === "Half-Day").length * 0.5)
-                                        const otShifts = record.attendance.filter(s => s === "Overtime").length
-                                        const bonus = otShifts * 500
-
-                                        const gross = (shifts * emp.dailyWage) + bonus
-                                        const net = gross - emp.advancesTaken
-
-                                        return (
-                                            <TableRow key={record.employeeId}>
+                                    {isLoadingPayroll ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center py-8">
+                                                <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
+                                                <p className="text-sm text-muted-foreground mt-2">Loading payroll...</p>
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : payrollData && payrollData.employees.length > 0 ? (
+                                        payrollData.employees.map((entry) => (
+                                            <TableRow key={entry.employee_id}>
                                                 <TableCell className="font-medium">
-                                                    <div>{record.employeeName}</div>
-                                                    <div className="text-xs text-muted-foreground">{emp.role}</div>
+                                                    <div>{entry.employee_name}</div>
+                                                    <div className="text-xs text-muted-foreground">{entry.role}</div>
                                                 </TableCell>
-                                                <TableCell className="text-right">{shifts}</TableCell>
-                                                <TableCell className="text-right">{gross.toLocaleString()}</TableCell>
-                                                <TableCell className="text-right text-red-500">-{emp.advancesTaken.toLocaleString()}</TableCell>
-                                                <TableCell className="text-right font-bold">{net.toLocaleString()} LKR</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button variant="ghost" size="sm" onClick={() => setPayrollViewingEmp(emp.id)}>
-                                                        <Eye className="h-4 w-4 text-blue-500 mr-2" /> View Details
-                                                    </Button>
+                                                    <div>{Number(entry.total_days_worked).toFixed(1)}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {entry.days_present}P + {entry.days_half}H + {entry.days_overtime}OT
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right">{Number(entry.gross_wage).toLocaleString()}</TableCell>
+                                                <TableCell className="text-right text-red-500">-{Number(entry.total_advances).toLocaleString()}</TableCell>
+                                                <TableCell className="text-right font-bold">{Number(entry.net_payable).toLocaleString()} LKR</TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {entry.is_paid ? (
+                                                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                                                ✓ Paid {entry.paid_at ? new Date(entry.paid_at).toLocaleDateString() : ''}
+                                                            </Badge>
+                                                        ) : (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="text-green-600 border-green-300 hover:bg-green-50"
+                                                                onClick={() => {
+                                                                    setPaymentDialogData({
+                                                                        employee_id: entry.employee_id,
+                                                                        employee_name: entry.employee_name,
+                                                                        gross_wage: Number(entry.gross_wage),
+                                                                        total_advances: Number(entry.total_advances),
+                                                                        net_payable: Number(entry.net_payable),
+                                                                    });
+                                                                    setPaymentNotes('');
+                                                                    setPaymentDateTime(new Date().toISOString().slice(0, 16));
+                                                                    setPaymentDialogOpen(true);
+                                                                }}
+                                                            >
+                                                                Mark Paid
+                                                            </Button>
+                                                        )}
+                                                        <Button variant="ghost" size="sm" onClick={() => setPayrollViewingEmp(entry.employee_id)}>
+                                                            <Eye className="h-4 w-4 text-blue-500 mr-2" /> View Details
+                                                        </Button>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
-                                        )
-                                    })}
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                                No payroll data for this period
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
                                 </TableBody>
                             </Table>
+
+                            {/* Totals Summary */}
+                            {payrollData && payrollData.employees.length > 0 && (
+                                <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+                                    <h4 className="font-semibold mb-3">Period Summary ({payrollStartDate} to {payrollEndDate})</h4>
+                                    <div className="grid grid-cols-3 gap-4 text-sm">
+                                        <div>
+                                            <span className="text-muted-foreground">Total Gross:</span>
+                                            <span className="ml-2 font-medium">{Number(payrollData.total_gross).toLocaleString()} LKR</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Total Advances:</span>
+                                            <span className="ml-2 font-medium text-red-500">-{Number(payrollData.total_advances).toLocaleString()} LKR</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Total Net:</span>
+                                            <span className="ml-2 font-bold text-green-600">{Number(payrollData.total_net).toLocaleString()} LKR</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
+
 
                 {/* --- Tab 4: Employee Roster --- */}
                 <TabsContent value="roster" className="space-y-4">
@@ -962,6 +1475,72 @@ export default function StaffPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {/* --- Payroll Details Modal --- */}
+            <Dialog open={!!payrollViewingEmp} onOpenChange={(open) => !open && setPayrollViewingEmp(null)}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Employee Payroll Details</DialogTitle>
+                        <DialogDescription>
+                            Shift and payment history for {payrollData?.employees.find(e => e.employee_id === payrollViewingEmp)?.employee_name || 'Employee'}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-6 py-4">
+                        <div className="grid md:grid-cols-2 gap-4">
+                            {/* Advance History */}
+                            <div className="border rounded-md p-4">
+                                <h4 className="font-semibold mb-3 flex items-center">
+                                    <Download className="w-4 h-4 mr-2 text-red-500" />
+                                    Advance History
+                                </h4>
+                                {isLoadingAdvances ? (
+                                    <div className="flex justify-center p-4"><Loader2 className="animate-spin h-4 w-4" /></div>
+                                ) : (
+                                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                        {advancesData?.map((record: any) => (
+                                            <div key={record.id} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                                                <span>{record.payment_date}</span>
+                                                <span className="font-medium text-red-500">-{Number(record.amount).toLocaleString()}</span>
+                                            </div>
+                                        ))}
+                                        {(!advancesData || advancesData.length === 0) && (
+                                            <p className="text-sm text-muted-foreground text-center py-4">No advances found</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Shift History */}
+                            <div className="border rounded-md p-4">
+                                <h4 className="font-semibold mb-3 flex items-center">
+                                    <Clock className="w-4 h-4 mr-2 text-blue-500" />
+                                    Recent Shifts
+                                </h4>
+                                {isLoadingShifts ? (
+                                    <div className="flex justify-center p-4"><Loader2 className="animate-spin h-4 w-4" /></div>
+                                ) : (
+                                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                        {shiftsData?.map((shift: any) => (
+                                            <div key={shift.id} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                                                <div>
+                                                    <span className="font-medium">{shift.attendance_date}</span>
+                                                    <span className="text-xs text-muted-foreground ml-2">({shift.status})</span>
+                                                </div>
+                                                <span className="text-xs capitalize">{shift.shift_type || '-'}</span>
+                                            </div>
+                                        ))}
+                                        {(!shiftsData || shiftsData.length === 0) && (
+                                            <p className="text-sm text-muted-foreground text-center py-4">No shifts found</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
         </div>
     )
 }
