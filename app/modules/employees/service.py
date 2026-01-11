@@ -5,7 +5,7 @@ CRUD operations, attendance marking, and payroll calculation.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -13,11 +13,11 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.employees.models import Employee, Attendance, AdvancePayment, AttendanceStatus
+from app.modules.employees.models import Employee, Attendance, AdvancePayment, AttendanceStatus, PayrollPayment
 from app.modules.employees.schemas import (
     EmployeeCreate, EmployeeUpdate, EmployeeRead,
     BulkAttendanceCreate, AttendanceRead,
-    PayrollEntry, PayrollResponse,
+    PayrollEntry, PayrollResponse, PayrollPaymentCreate,
 )
 
 
@@ -360,6 +360,17 @@ async def calculate_payroll(
         
         net = gross - advances
         
+        # Check if payment already recorded for this period
+        payment_stmt = select(PayrollPayment).where(
+            and_(
+                PayrollPayment.employee_id == emp.id,
+                PayrollPayment.period_start == start_date,
+                PayrollPayment.period_end == end_date,
+            )
+        )
+        payment_result = await db.execute(payment_stmt)
+        payment = payment_result.scalar_one_or_none()
+        
         payroll_entries.append(PayrollEntry(
             employee_id=emp.id,
             employee_name=emp.full_name,
@@ -372,6 +383,8 @@ async def calculate_payroll(
             gross_wage=gross,
             total_advances=advances,
             net_payable=net,
+            is_paid=payment is not None,
+            paid_at=payment.paid_at if payment else None,
         ))
         
         total_gross += gross
@@ -402,8 +415,8 @@ async def create_advance_payment(
         id=uuid4(),
         employee_id=data.employee_id,
         amount=data.amount,
-        date=data.date or date.today(),
-        time=data.time,
+        payment_date=data.date or date.today(),
+        payment_time=data.time,
         reason=data.reason,
         notes=data.notes,
         approved_by=approved_by,
@@ -422,8 +435,76 @@ async def get_employee_advances(
     stmt = (
         select(AdvancePayment)
         .where(AdvancePayment.employee_id == employee_id)
-        .order_by(AdvancePayment.date.desc(), AdvancePayment.created_at.desc())
+        .order_by(AdvancePayment.payment_date.desc(), AdvancePayment.created_at.desc())
         .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+# ============================================================================
+# Payroll Payments
+# ============================================================================
+
+async def record_payroll_payment(
+    data: PayrollPaymentCreate,
+    paid_by: UUID | None,
+    db: AsyncSession
+) -> PayrollPayment:
+    """Record a payroll payment for an employee."""
+    # Check if already paid for this period
+    stmt = select(PayrollPayment).where(
+        and_(
+            PayrollPayment.employee_id == data.employee_id,
+            PayrollPayment.period_start == data.period_start,
+            PayrollPayment.period_end == data.period_end,
+        )
+    )
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+    
+    if existing:
+        raise ValueError("Payment already recorded for this employee and period")
+    
+    # Include paid_by name in notes if provided
+    notes_text = data.notes or ""
+    if data.paid_by:
+        notes_text = f"Paid by: {data.paid_by}\n{notes_text}".strip()
+    
+    payment = PayrollPayment(
+        id=uuid4(),
+        employee_id=data.employee_id,
+        period_start=data.period_start,
+        period_end=data.period_end,
+        gross_amount=data.gross_amount,
+        advances_deducted=data.advances_deducted,
+        net_amount=data.net_amount,
+        paid_by=paid_by,  # UUID of current user
+        notes=notes_text if notes_text else None,
+    )
+    db.add(payment)
+    await db.flush()
+    return payment
+
+
+async def get_payroll_payments(
+    station_id: UUID,
+    period_start: date,
+    period_end: date,
+    db: AsyncSession
+) -> list[PayrollPayment]:
+    """Get all payroll payments for a station's employees in a period."""
+    stmt = (
+        select(PayrollPayment)
+        .join(Employee)
+        .where(
+            and_(
+                Employee.station_id == station_id,
+                PayrollPayment.period_start == period_start,
+                PayrollPayment.period_end == period_end,
+            )
+        )
+        .order_by(PayrollPayment.paid_at.desc())
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
