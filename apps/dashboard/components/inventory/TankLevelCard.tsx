@@ -56,11 +56,11 @@ export function TankLevelCard({
             wave: "bg-rose-300/50",
         },
         white: {
-            gradient: "from-slate-200 via-slate-100 to-white dark:from-slate-400 dark:via-slate-300 dark:to-slate-200",
+            gradient: "from-slate-200 via-slate-100 to-white",
             glow: "shadow-slate-400/30",
-            badge: "bg-gradient-to-r from-slate-200 to-white dark:from-slate-400 dark:to-slate-200 border border-slate-300",
-            badgeText: "text-slate-800 dark:text-slate-900",
-            wave: "bg-white/50 dark:bg-slate-200/50",
+            badge: "bg-gradient-to-r from-slate-200 to-white border border-slate-300",
+            badgeText: "text-slate-800",
+            wave: "bg-white/50",
         },
         blue: {
             gradient: "from-sky-400 via-blue-500 to-indigo-600",
@@ -72,14 +72,14 @@ export function TankLevelCard({
     };
 
     const cfg = colorConfig[color];
-    const isLow = percentage < 25;
-    const isCritical = percentage < 15;
+    const isLow = percentage < 20;
+    const isCritical = percentage < 10;
 
     return (
         <Card
             className={cn(
                 "overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:shadow-xl",
-                "border-0 bg-gradient-to-br from-white/80 to-white/40 dark:from-slate-900/80 dark:to-slate-800/40",
+                "border-0 bg-gradient-to-br from-white/80 to-white/40",
                 "backdrop-blur-sm",
                 mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
                 isCritical && "ring-2 ring-red-500/50 animate-pulse"
@@ -113,7 +113,7 @@ export function TankLevelCard({
                         L
                     </span>
                     {isLow && (
-                        <span className="ml-auto px-2 py-0.5 text-xs font-semibold rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                        <span className="ml-auto px-2 py-0.5 text-xs font-semibold rounded bg-red-100 text-red-700">
                             LOW
                         </span>
                     )}
@@ -123,8 +123,8 @@ export function TankLevelCard({
                 <div
                     className={cn(
                         "relative h-36 w-full rounded-xl overflow-hidden",
-                        "bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900",
-                        "border border-slate-200/50 dark:border-slate-700/50",
+                        "bg-gradient-to-b from-slate-500 to-slate-800",
+                        "border border-slate-200/50",
                         "shadow-inner"
                     )}
                 >
@@ -164,8 +164,8 @@ export function TankLevelCard({
                     <div className="absolute inset-x-2 inset-y-0 flex flex-col justify-between py-2 pointer-events-none">
                         {[75, 50, 25].map((level) => (
                             <div key={level} className="flex items-center gap-2">
-                                <div className="w-3 h-px bg-slate-400/50 dark:bg-slate-500/50" />
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                                <div className="w-3 h-px bg-slate-400/50" />
+                                <span className="text-[10px] text-slate-400 font-medium">
                                     {level}%
                                 </span>
                             </div>
@@ -177,8 +177,8 @@ export function TankLevelCard({
                         <div
                             className={cn(
                                 "px-4 py-2 rounded-lg backdrop-blur-sm",
-                                "bg-white/70 dark:bg-black/50",
-                                "shadow-lg border border-white/20 dark:border-white/10"
+                                "bg-white/70",
+                                "shadow-lg border border-white/20"
                             )}
                         >
                             <span className="text-2xl font-bold tabular-nums text-slate-900">
