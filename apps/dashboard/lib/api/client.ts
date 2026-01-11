@@ -75,6 +75,13 @@ import type {
     RegulatoryReturn,
     RegulatoryReturnCreate,
     ReconciliationStats,
+    BankAccount,
+    BankAccountCreate,
+    BankAccountUpdate,
+    ExpenseCategoryRead,
+    ExpenseCategoryCreate,
+    ExpenseCategoryUpdate,
+    DailySalesSummary,
 } from './types';
 
 
@@ -515,7 +522,10 @@ export const users = {
     /**
      * Get all users for the station
      */
-    getAll: () => request<User[]>('/users'),
+    getAll: (stationId?: string) => {
+        const query = stationId ? `?station_id=${stationId}` : '';
+        return request<User[]>(`/users${query}`);
+    },
 
     /**
      * Invite a new user
@@ -533,6 +543,24 @@ export const users = {
         request<{ user_id: string; message: string }>(`/users/${userId}`, {
             method: 'DELETE',
         }),
+
+    /**
+     * Update user password (system admin only)
+     */
+    updatePassword: (userId: string, password: string) =>
+        request<{ message: string }>(`/users/${userId}/password`, {
+            method: 'PATCH',
+            body: JSON.stringify({ password }),
+        }),
+
+    /**
+     * Assign user to a station (system admin only)
+     */
+    assignStation: (userId: string, stationId: string, role: string = 'owner') =>
+        request<{ message: string }>(`/users/${userId}/station`, {
+            method: 'PUT',
+            body: JSON.stringify({ station_id: stationId, role }),
+        }),
 };
 
 // ============================================================================
@@ -544,6 +572,11 @@ export const sales = {
      * Get current open shift
      */
     getCurrentShift: () => request<Shift | null>('/sales/shifts/current'),
+
+    /**
+     * Get most recently closed shift (for dashboard fallback)
+     */
+    getLatestShift: () => request<Shift | null>('/sales/shifts/latest'),
 
     /**
      * Get shift summary with sales totals
@@ -614,6 +647,12 @@ export const sales = {
         request<WeeklySalesStat[]>(`/sales/chart/weekly?start_date=${startDate}&end_date=${endDate}`),
 
     /**
+     * Get daily sales summary with day/night breakdown
+     */
+    getDailySummary: (date: string) =>
+        request<DailySalesSummary>(`/sales/daily-summary?date=${date}`),
+
+    /**
      * Get aggregated nozzle sales for a tank (for dip calculation)
      */
     getTankSales: (tankId: string, salesDate: string) =>
@@ -670,12 +709,14 @@ export const sales = {
     /**
      * Get paginated sales history for the station
      */
-    getSalesHistory: (params?: { limit?: number; offset?: number; startDate?: string; endDate?: string }) => {
+    getSalesHistory: (params?: { limit?: number; offset?: number; startDate?: string; endDate?: string; nozzleId?: string; productCode?: string }) => {
         const searchParams = new URLSearchParams();
         if (params?.limit) searchParams.set('limit', String(params.limit));
         if (params?.offset) searchParams.set('offset', String(params.offset));
         if (params?.startDate) searchParams.set('start_date', params.startDate);
         if (params?.endDate) searchParams.set('end_date', params.endDate);
+        if (params?.nozzleId) searchParams.set('nozzle_id', params.nozzleId);
+        if (params?.productCode) searchParams.set('product_code', params.productCode);
         const queryString = searchParams.toString();
         return request<SalesHistoryResponse>(`/sales/history${queryString ? `?${queryString}` : ''}`);
     },
@@ -751,6 +792,38 @@ export const exports = {
         const filename = `employees_${today}.csv`;
         return downloadFile(`/exports/employees?include_inactive=${includeInactive}`, filename);
     },
+
+    /**
+     * Export card settlements as CSV
+     */
+    downloadCardSettlements: (startDate: string, endDate: string) => {
+        const filename = `card_settlements_${startDate}_to_${endDate}.csv`;
+        return downloadFile(`/exports/settlements/card?start=${startDate}&end=${endDate}`, filename);
+    },
+
+    /**
+     * Export deposits as CSV
+     */
+    downloadDeposits: (startDate: string, endDate: string) => {
+        const filename = `deposits_${startDate}_to_${endDate}.csv`;
+        return downloadFile(`/exports/settlements/deposits?start=${startDate}&end=${endDate}`, filename);
+    },
+
+    /**
+     * Export expenses as CSV
+     */
+    downloadExpenses: (startDate: string, endDate: string) => {
+        const filename = `expenses_${startDate}_to_${endDate}.csv`;
+        return downloadFile(`/exports/expenses?start=${startDate}&end=${endDate}`, filename);
+    },
+
+    /**
+     * Export reconciliation report as CSV
+     */
+    downloadReconciliation: (startDate: string, endDate: string) => {
+        const filename = `reconciliation_${startDate}_to_${endDate}.csv`;
+        return downloadFile(`/exports/reconciliation?start=${startDate}&end=${endDate}`, filename);
+    },
 };
 
 // ============================================================================
@@ -802,6 +875,36 @@ export const accounts = {
      */
     getTransactions: (accountId: string, limit = 50) =>
         request<Transaction[]>(`/accounts/${accountId}/transactions?limit=${limit}`),
+
+    /**
+     * Get all bank accounts
+     */
+    getBanks: (activeOnly = true) =>
+        request<BankAccount[]>(`/accounts/banks?active_only=${activeOnly}`),
+
+    /**
+     * Create a new bank account
+     */
+    createBank: (data: BankAccountCreate) =>
+        request<BankAccount>('/accounts/banks', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    /**
+     * Update a bank account
+     */
+    updateBank: (id: string, data: BankAccountUpdate) =>
+        request<BankAccount>(`/accounts/banks/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+
+    /**
+     * Delete a bank account
+     */
+    deleteBank: (id: string) =>
+        request<void>(`/accounts/banks/${id}`, { method: 'DELETE' }),
 };
 
 // ============================================================================
@@ -814,6 +917,24 @@ export const admin = {
      */
     getStations: () =>
         request<Station[]>('/admin/stations'),
+
+    /**
+     * Create a new station (system admin only)
+     */
+    createStation: (data: { name: string; owner_email: string; address?: string; phone?: string }) =>
+        request<Station>('/admin/stations', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    /**
+     * Update station details (system admin only)
+     */
+    updateStation: (stationId: string, data: { name?: string; address?: string; phone?: string; email?: string; status?: string }) =>
+        request<Station>(`/admin/stations/${stationId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
 
     /**
      * Get support access status for a station
@@ -839,6 +960,15 @@ export const admin = {
         params.append('limit', limit.toString());
         return request<AuditLog[]>(`/admin/audit-log?${params.toString()}`);
     },
+
+    /**
+     * Invite a user to a station (system admin only)
+     */
+    inviteUser: (data: { email: string; full_name?: string; role: string; station_id: string }) =>
+        request<{ user_id: string; email: string; role: string; station_id: string; message: string }>('/users/invite', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
 };
 
 // ============================================================================
@@ -949,7 +1079,31 @@ export const expenses = {
      * Get expense categories
      */
     getCategories: () =>
-        request<string[]>('/expenses/categories'),
+        request<ExpenseCategoryRead[]>('/expenses/categories'),
+
+    /**
+     * Create expense category
+     */
+    createCategory: (data: ExpenseCategoryCreate) =>
+        request<ExpenseCategoryRead>('/expenses/categories', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    /**
+     * Update expense category
+     */
+    updateCategory: (id: string, data: ExpenseCategoryUpdate) =>
+        request<ExpenseCategoryRead>(`/expenses/categories/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+
+    /**
+     * Delete expense category
+     */
+    deleteCategory: (id: string) =>
+        request<void>(`/expenses/categories/${id}`, { method: 'DELETE' }),
 
     /**
      * Get a single expense by ID
@@ -994,6 +1148,28 @@ export const auth = {
 };
 
 // ============================================================================
+// Stations Endpoints (Settings)
+// ============================================================================
+
+import type { StationSettings, StationSettingsUpdate } from './types';
+
+export const stations = {
+    /**
+     * Get station settings (alert thresholds, etc.)
+     */
+    getSettings: () => request<StationSettings>('/stations/settings'),
+
+    /**
+     * Update station settings
+     */
+    updateSettings: (data: StationSettingsUpdate) =>
+        request<StationSettings>('/stations/settings', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+};
+
+// ============================================================================
 // Export all API modules
 // ============================================================================
 
@@ -1010,6 +1186,7 @@ export const api = {
     settlements,
     expenses,
     auth,
+    stations,
 };
 
 export default api;
