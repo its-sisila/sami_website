@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import { useTanks } from "@/lib/hooks";
 import { Loader2 } from "lucide-react";
 import { mutate } from "swr";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 // Mock Data for Tanks
 // 5000G Tanks: LAD-1, LAD-2, LAD-3, LAD-4
@@ -54,7 +55,7 @@ function InventoryContent() {
     );
 
     // Fetch tank data for summary section (can be different date)
-    const { data: summaryTanksApi } = useTanks(
+    const { data: summaryTanksApi, mutate: mutateSummaryTanks } = useTanks(
         summaryDate === new Date().toISOString().split("T")[0] ? null : summaryDate,
         {
             revalidateOnFocus: false,
@@ -64,6 +65,13 @@ function InventoryContent() {
     // Callback to refresh tanks after saving a reading
     const handleReadingSaved = () => {
         mutateTanks(); // Revalidate tanks data from API
+        mutateSummaryTanks(); // Also refresh summary
+    };
+
+    // Callback to refresh tanks after a delivery is recorded
+    const handleDeliveryComplete = () => {
+        mutateTanks(); // Revalidate tank levels (delivery added fuel)
+        mutateSummaryTanks(); // Also refresh summary section
     };
 
     // Map API data to the format expected by components, fallback to mock data (if enabled)
@@ -302,33 +310,39 @@ function InventoryContent() {
                     </div>
 
                     <TabsContent value="reading" className="border-none p-0 outline-none space-y-6">
-                        <DailyReadingForm tanks={tanksData} onSaveSuccess={handleReadingSaved} />
+                        <ErrorBoundary fallbackTitle="Error loading Daily Reading form">
+                            <DailyReadingForm tanks={tanksData} onSaveSuccess={handleReadingSaved} />
 
-                        {/* History Section - only visible in Daily Reading tab */}
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold">Recent Activity & History</h2>
+                            {/* History Section - only visible in Daily Reading tab */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-lg font-semibold">Recent Activity & History</h2>
+                                </div>
+                                <InventoryHistoryTable />
                             </div>
-                            <InventoryHistoryTable />
-                        </div>
+                        </ErrorBoundary>
                     </TabsContent>
 
                     <TabsContent value="return" className="border-none p-0 outline-none space-y-6">
-                        <RegulatoryReturnForm />
+                        <ErrorBoundary fallbackTitle="Error loading Regulatory Return form">
+                            <RegulatoryReturnForm />
 
-                        {/* History Section - Regulatory Returns */}
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold">Regulatory Return History</h2>
+                            {/* History Section - Regulatory Returns */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-lg font-semibold">Regulatory Return History</h2>
+                                </div>
+                                <RegulatoryReturnHistory />
                             </div>
-                            <RegulatoryReturnHistory />
-                        </div>
+                        </ErrorBoundary>
                     </TabsContent>
 
                     <TabsContent value="orders" className="border-none p-0 outline-none">
-                        <div className="w-full">
-                            <FuelOrdersManager />
-                        </div>
+                        <ErrorBoundary fallbackTitle="Error loading Fuel Orders">
+                            <div className="w-full">
+                                <FuelOrdersManager onDeliveryComplete={handleDeliveryComplete} />
+                            </div>
+                        </ErrorBoundary>
                     </TabsContent>
                 </Tabs>
             </section>
