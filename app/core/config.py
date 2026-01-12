@@ -34,7 +34,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://dashboard.getsami.app",
+        "https://getsami.app",
+        "https://www.getsami.app",
+    ]
     
     @property
     def async_database_url(self) -> str:
