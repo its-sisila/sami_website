@@ -3,8 +3,13 @@ Application configuration using pydantic-settings.
 Reads environment variables for database and Supabase connections.
 """
 
+import json
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# Default CORS origins as a string (comma-separated)
+DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://localhost:3001,https://dashboard.getsami.app,https://getsami.app,https://www.getsami.app"
 
 
 class Settings(BaseSettings):
@@ -33,14 +38,23 @@ class Settings(BaseSettings):
     jwt_secret: str = ""  # Supabase JWT secret
     jwt_algorithm: str = "HS256"
     
-    # CORS
-    cors_origins: list[str] = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://dashboard.getsami.app",
-        "https://getsami.app",
-        "https://www.getsami.app",
-    ]
+    # CORS - stored as string, converted to list via property
+    cors_origins_str: str = DEFAULT_CORS_ORIGINS
+    
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse CORS origins from string."""
+        val = self.cors_origins_str
+        if not val:
+            return DEFAULT_CORS_ORIGINS.split(",")
+        # Try JSON array first
+        if val.startswith("["):
+            try:
+                return json.loads(val)
+            except json.JSONDecodeError:
+                pass
+        # Fall back to comma-separated
+        return [origin.strip() for origin in val.split(",") if origin.strip()]
     
     @property
     def async_database_url(self) -> str:
@@ -58,3 +72,4 @@ def get_settings() -> Settings:
 
 # Global settings instance
 settings = get_settings()
+
