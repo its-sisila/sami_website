@@ -703,23 +703,23 @@ export default function DashboardPage() {
                                 )}
                             </div>
                         </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="text-center p-3 rounded-lg bg-muted/50">
-                                    <p className="text-xs text-muted-foreground mb-1">Total Sales</p>
-                                    <p className="text-lg font-bold">LKR {(currentShiftInfo?.totalSales ?? 0).toLocaleString()}</p>
+                        <CardContent className="p-3 md:p-4 pt-0">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+                                <div className="text-center p-2 md:p-3 rounded-lg bg-muted/50">
+                                    <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">Total Sales</p>
+                                    <p className="text-sm md:text-lg font-bold truncate">LKR {(currentShiftInfo?.totalSales ?? 0).toLocaleString()}</p>
                                 </div>
-                                <div className="text-center p-3 rounded-lg bg-muted/50">
-                                    <p className="text-xs text-muted-foreground mb-1">Liters Sold</p>
-                                    <p className="text-lg font-bold">{(currentShiftInfo?.totalLiters ?? 0).toLocaleString()} L</p>
+                                <div className="text-center p-2 md:p-3 rounded-lg bg-muted/50">
+                                    <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">Liters Sold</p>
+                                    <p className="text-sm md:text-lg font-bold">{(currentShiftInfo?.totalLiters ?? 0).toLocaleString()} L</p>
                                 </div>
-                                <div className="text-center p-3 rounded-lg bg-muted/50">
-                                    <p className="text-xs text-muted-foreground mb-1">Sales Count</p>
-                                    <p className="text-lg font-bold text-blue-600">{currentShiftInfo?.salesCount ?? '-'}</p>
+                                <div className="text-center p-2 md:p-3 rounded-lg bg-muted/50">
+                                    <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">Sales Count</p>
+                                    <p className="text-sm md:text-lg font-bold text-blue-600">{currentShiftInfo?.salesCount ?? '-'}</p>
                                 </div>
-                                <div className="text-center p-3 rounded-lg bg-emerald-50">
-                                    <p className="text-xs text-muted-foreground mb-1">Status</p>
-                                    <p className={`text-lg font-bold ${currentShiftInfo?.isOpen ? "text-emerald-600" : "text-muted-foreground"}`}>
+                                <div className="text-center p-2 md:p-3 rounded-lg bg-emerald-50">
+                                    <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">Status</p>
+                                    <p className={`text-sm md:text-lg font-bold ${currentShiftInfo?.isOpen ? "text-emerald-600" : "text-muted-foreground"}`}>
                                         {currentShiftInfo?.isOpen ? "In Progress" : "Closed"}
                                     </p>
                                 </div>
@@ -738,9 +738,9 @@ export default function DashboardPage() {
                             </div>
                             <CardDescription>Day vs Night shift comparison</CardDescription>
                         </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                            <div className="-mx-4 md:mx-0 overflow-x-auto">
-                                <div className="min-w-[500px] md:min-w-0 h-[280px] w-full px-4 md:px-0">
+                        <CardContent className="p-3 md:p-4 pt-0">
+                            <div className="-mx-3 md:-mx-4 md:mx-0 overflow-x-auto">
+                                <div className="min-w-[400px] md:min-w-0 h-[200px] md:h-[280px] w-full px-3 md:px-0">
                                     <ResponsiveContainer width="100%" height="100%">
                                         {weeklySalesLoading ? (
                                             <div className="flex h-full items-center justify-center">
@@ -749,15 +749,15 @@ export default function DashboardPage() {
                                         ) : (
                                             <BarChart data={weeklySales && weeklySales.length > 0 ? weeklySales : []}>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-                                                <XAxis dataKey="day" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                                <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`} />
+                                                <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                                                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`} width={35} />
                                                 <Tooltip
                                                     formatter={(value: number) => [`LKR ${Number(value).toLocaleString()}`, '']}
-                                                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)' }}
+                                                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', fontSize: 12 }}
                                                 />
-                                                <Legend wrapperStyle={{ fontSize: 12 }} />
-                                                <Bar dataKey="dayShift" name="Day Shift" fill="#ff961e" radius={[4, 4, 0, 0]} />
-                                                <Bar dataKey="nightShift" name="Night Shift" fill="#03045E" radius={[4, 4, 0, 0]} />
+                                                <Legend wrapperStyle={{ fontSize: 10 }} />
+                                                <Bar dataKey="dayShift" name="Day" fill="#ff961e" radius={[4, 4, 0, 0]} />
+                                                <Bar dataKey="nightShift" name="Night" fill="#03045E" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         )}
                                     </ResponsiveContainer>
