@@ -51,7 +51,12 @@ export default function LoginPage() {
             <div className="w-full max-w-md px-8">
                 {/* Logo/Title */}
                 <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold text-white mb-2">SAMI</h1>
+                    <a
+                        href={process.env.NEXT_PUBLIC_LANDING_URL || "https://www.getsami.app/"}
+                        className="inline-block hover:opacity-80 transition-opacity"
+                    >
+                        <h1 className="text-4xl font-bold text-white mb-2">SAMI</h1>
+                    </a>
                     <p className="text-slate-400">Shed AI Manager Interface</p>
                 </div>
 
