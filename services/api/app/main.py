@@ -79,6 +79,15 @@ async def health_check():
     return {"status": "ok", "service": settings.app_name}
 
 
+@app.get("/debug/cors")
+async def debug_cors():
+    """Debug endpoint to check loaded CORS origins."""
+    return {
+        "cors_origins": settings.cors_origins,
+        "cors_origins_type": str(type(settings.cors_origins)),
+    }
+
+
 # Mount module routers
 from app.modules.auth import router as auth_router
 from app.modules.employees import router as employees_router

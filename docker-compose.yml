@@ -11,6 +11,7 @@ services:
       - ./services/api/.env
     environment:
       - PORT=8000
+      - CORS_ORIGINS_STR=http://localhost:3000,http://localhost:3001,https://dashboard.getsami.app,https://getsami.app
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" ]
       interval: 30s
