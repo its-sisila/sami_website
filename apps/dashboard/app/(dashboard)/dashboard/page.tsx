@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
     Banknote,
@@ -20,7 +20,11 @@ import {
     ShoppingCart,
     Loader2,
     RefreshCcw,
+    Bell,
+    UserCircle,
+    ClipboardList,
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     LineChart,
     BarChart,
@@ -67,13 +71,14 @@ interface MetricItem {
     trend: string | null;
     trendUp: boolean;
     href: string;
+    color?: "slate" | "emerald" | "amber" | "violet" | "rose" | "sky";
 }
 
 const PLACEHOLDER_METRICS: MetricItem[] = [
-    { title: "Today's Stock", value: "0 L", subtext: "No stock data", icon: Droplets, trend: null, trendUp: true, href: "/inventory" },
-    { title: "Yesterday's Sales", value: "LKR 0", subtext: "No sales data", icon: Banknote, trend: null, trendUp: true, href: "/sales" },
-    { title: "Pending Orders", value: "No Orders", subtext: "All orders fulfilled", icon: ShoppingCart, trend: null, trendUp: false, href: "/inventory?tab=orders" },
-    { title: "Staff On Duty", value: "0 Active", subtext: "No active staff", icon: Users, trend: null, trendUp: true, href: "/staff" },
+    { title: "Today's Stock", value: "0 L", subtext: "No stock data", icon: Droplets, trend: null, trendUp: true, href: "/inventory", color: "sky" },
+    { title: "Yesterday's Sales", value: "LKR 0", subtext: "No sales data", icon: Banknote, trend: null, trendUp: true, href: "/sales", color: "emerald" },
+    { title: "Pending Orders", value: "No Orders", subtext: "All orders fulfilled", icon: ShoppingCart, trend: null, trendUp: false, href: "/inventory?tab=orders", color: "amber" },
+    { title: "Staff On Duty", value: "0 Active", subtext: "No active staff", icon: Users, trend: null, trendUp: true, href: "/staff", color: "violet" },
 ];
 
 // --- Components ---
@@ -82,25 +87,39 @@ const PLACEHOLDER_METRICS: MetricItem[] = [
 
 function MetricCard({ item }: { item: MetricItem }) {
     const Icon = item.icon;
+
+    // Color configurations similar to Inventory page
+    const colorStyles = {
+        slate: { bg: "bg-gradient-to-br from-slate-50 to-slate-100", border: "border-slate-200", iconBg: "bg-slate-100", iconText: "text-slate-600" },
+        emerald: { bg: "bg-gradient-to-br from-emerald-50 to-emerald-100", border: "border-emerald-200", iconBg: "bg-emerald-100", iconText: "text-emerald-600" },
+        amber: { bg: "bg-gradient-to-br from-amber-50 to-amber-100", border: "border-amber-200", iconBg: "bg-amber-100", iconText: "text-amber-600" },
+        violet: { bg: "bg-gradient-to-br from-violet-50 to-violet-100", border: "border-violet-200", iconBg: "bg-violet-100", iconText: "text-violet-600" },
+        rose: { bg: "bg-gradient-to-br from-rose-50 to-rose-100", border: "border-rose-200", iconBg: "bg-rose-100", iconText: "text-rose-600" },
+        sky: { bg: "bg-gradient-to-br from-sky-50 to-sky-100", border: "border-sky-200", iconBg: "bg-sky-100", iconText: "text-sky-600" },
+        default: { bg: "bg-card", border: "border-border", iconBg: "bg-muted", iconText: "text-muted-foreground" },
+    };
+
+    const style = item.color ? colorStyles[item.color] : colorStyles.default;
+
     return (
         <Link href={item.href}>
-            <Card className="hover:shadow-md transition-all hover:border-primary/50 cursor-pointer h-full">
-                <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 rounded-lg bg-muted">
-                            <Icon className="w-6 h-6 text-muted-foreground" />
+            <Card className={`hover:shadow-md transition-all hover:scale-[1.02] cursor-pointer h-full border ${style.bg} ${style.border}`}>
+                <CardContent className="p-3 md:p-4 flex flex-col justify-between h-full">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className={`p-1.5 md:p-2 rounded-lg ${style.iconBg}`}>
+                            <Icon className={`w-4 h-4 md:w-5 md:h-5 ${style.iconText}`} />
                         </div>
                         {item.trend && (
-                            <Badge variant="outline" className={item.trendUp ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-muted text-muted-foreground"}>
-                                {item.trendUp && <ArrowUpRight className="w-3 h-3 mr-1" />}
+                            <Badge variant="outline" className={`px-1.5 py-0 h-5 md:h-6 text-[10px] md:text-xs ${item.trendUp ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-rose-100 text-rose-700 border-rose-200"}`}>
+                                {item.trendUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
                                 {item.trend}
                             </Badge>
                         )}
                     </div>
                     <div>
-                        <p className="text-muted-foreground text-sm font-medium mb-1">{item.title}</p>
-                        <p className="text-2xl font-bold text-foreground">{item.value}</p>
-                        <p className="text-sm mt-1 text-muted-foreground">{item.subtext}</p>
+                        <p className="text-muted-foreground text-[10px] md:text-xs font-semibold uppercase tracking-wider mb-0.5 truncate">{item.title}</p>
+                        <p className="text-lg md:text-2xl font-bold text-foreground tracking-tight truncate">{item.value}</p>
+                        <p className="text-[10px] md:text-xs mt-0.5 md:mt-1 text-muted-foreground line-clamp-1">{item.subtext}</p>
                     </div>
                 </CardContent>
             </Card>
@@ -274,6 +293,38 @@ export default function DashboardPage() {
         setLastUpdated(new Date());
         setIsRefreshing(false);
     }, []);
+
+    // ===== PULL TO REFRESH (Mobile) =====
+    const [pullDistance, setPullDistance] = useState(0);
+    const [isPulling, setIsPulling] = useState(false);
+    const touchStartY = useRef<number>(0);
+    const pullThreshold = 80; // Pixels to pull before triggering refresh
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        // Only enable pull-to-refresh when at top of page
+        if (window.scrollY === 0) {
+            touchStartY.current = e.touches[0].clientY;
+            setIsPulling(true);
+        }
+    }, []);
+
+    const handleTouchMove = useCallback((e: React.TouchEvent) => {
+        if (!isPulling) return;
+        const currentY = e.touches[0].clientY;
+        const diff = currentY - touchStartY.current;
+        if (diff > 0 && window.scrollY === 0) {
+            // Apply resistance to make it feel more natural
+            setPullDistance(Math.min(diff * 0.5, pullThreshold * 1.5));
+        }
+    }, [isPulling, pullThreshold]);
+
+    const handleTouchEnd = useCallback(() => {
+        if (pullDistance >= pullThreshold && !isRefreshing) {
+            handleRefresh();
+        }
+        setPullDistance(0);
+        setIsPulling(false);
+    }, [pullDistance, pullThreshold, isRefreshing, handleRefresh]);
 
     // ===== DERIVED DATA =====
 
@@ -522,7 +573,7 @@ export default function DashboardPage() {
     }, [stockData, pendingOrders, todayAttendance, allEmployees, currentShiftInfo, alertSettings]);
 
     // Dynamic metrics based on all API data
-    const dynamicMetrics = useMemo(() => {
+    const dynamicMetrics: MetricItem[] = useMemo(() => {
         return [
             {
                 title: "Today's Stock",
@@ -532,34 +583,27 @@ export default function DashboardPage() {
                 trend: stockTrend ? `${stockTrend.up ? '+' : '-'}${stockTrend.value.toFixed(1)}%` : null,
                 trendUp: stockTrend?.up ?? true,
                 href: "/inventory",
+                color: "sky",
             },
             {
                 title: "Yesterday's Sales",
-                value: yesterdaySales
-                    ? `LKR ${yesterdaySales.total_sales.toLocaleString()}`
-                    : (currentShiftInfo ? `LKR ${currentShiftInfo.totalSales.toLocaleString()}` : PLACEHOLDER_METRICS[1].value),
-                subtext: yesterdaySales
-                    ? `Day: ${yesterdaySales.day_shift_sales.toLocaleString()} • Night: ${yesterdaySales.night_shift_sales.toLocaleString()}`
-                    : (currentShiftInfo
-                        ? `${currentShiftInfo.type} Shift • ${currentShiftInfo.totalLiters.toLocaleString()} L sold`
-                        : PLACEHOLDER_METRICS[1].subtext),
+                value: `LKR ${yesterdaySales ? Number(yesterdaySales.total_sales).toLocaleString() : '0'}`,
+                subtext: salesTrend ? `${salesTrend.value.toFixed(1)}% vs day before` : "No prior data",
                 icon: Banknote,
                 trend: salesTrend ? `${salesTrend.up ? '+' : '-'}${salesTrend.value.toFixed(1)}%` : null,
                 trendUp: salesTrend?.up ?? true,
                 href: "/sales",
+                color: "emerald",
             },
             {
                 title: "Pending Orders",
-                value: pendingOrdersData.count > 0
-                    ? `${pendingOrdersData.count} Order${pendingOrdersData.count !== 1 ? 's' : ''}`
-                    : "No Orders",
-                subtext: pendingOrdersData.totalLiters > 0
-                    ? `${(pendingOrdersData.totalLiters / 1000).toFixed(1)}K L total`
-                    : "All orders fulfilled",
+                value: pendingOrders && pendingOrders.length > 0 ? `${pendingOrders.length} Pending` : "No Orders",
+                subtext: pendingOrders && pendingOrders.length > 0 ? "Requires attention" : "All orders fulfilled",
                 icon: ShoppingCart,
                 trend: null,
                 trendUp: false,
                 href: "/inventory?tab=orders",
+                color: "amber",
             },
             {
                 title: "Staff On Duty",
@@ -569,9 +613,10 @@ export default function DashboardPage() {
                 trend: staffOnDuty && staffOnDuty.length >= 4 ? "Full Strength" : null,
                 trendUp: true,
                 href: "/staff",
+                color: "violet",
             },
         ];
-    }, [totalStock, stockData.length, currentShiftInfo, pendingOrdersData, activeEmployees, yesterdaySales, salesTrend, stockTrend, staffOnDuty]);
+    }, [totalStock, stockData.length, currentShiftInfo, pendingOrdersData, activeEmployees, yesterdaySales, salesTrend, stockTrend, staffOnDuty, pendingOrders]);
 
     // Loading state - only block on essential data
     const isLoading = tanksLoading || pendingOrdersLoading;
@@ -586,13 +631,32 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="flex flex-col gap-6 p-6 bg-background min-h-screen">
+        <div
+            className="flex flex-col gap-4 md:gap-6 p-4 md:p-6 bg-background min-h-screen"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+        >
+            {/* Pull to Refresh Indicator (Mobile) */}
+            {pullDistance > 0 && (
+                <div
+                    className="fixed top-0 left-0 right-0 flex items-center justify-center z-50 transition-all"
+                    style={{ height: pullDistance, opacity: Math.min(pullDistance / pullThreshold, 1) }}
+                >
+                    <div className="bg-primary/10 rounded-full p-2">
+                        <RefreshCcw
+                            className={`w-6 h-6 text-primary transition-transform ${pullDistance >= pullThreshold ? 'animate-spin' : ''}`}
+                            style={{ transform: `rotate(${pullDistance * 2}deg)` }}
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-                    <p className="text-muted-foreground">Overview of your station's performance today.</p>
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
+                    <p className="text-sm md:text-base text-muted-foreground">Overview of your station's performance today.</p>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-2 rounded-lg border shadow-sm">
                     <Clock className="w-4 h-4" />
@@ -608,8 +672,8 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Top Row: Metric Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 {dynamicMetrics.map((item, i) => (
                     <MetricCard key={i} item={item} />
                 ))}
@@ -639,7 +703,7 @@ export default function DashboardPage() {
                                 )}
                             </div>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="p-4 pt-0">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div className="text-center p-3 rounded-lg bg-muted/50">
                                     <p className="text-xs text-muted-foreground mb-1">Total Sales</p>
@@ -674,28 +738,30 @@ export default function DashboardPage() {
                             </div>
                             <CardDescription>Day vs Night shift comparison</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="h-[280px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    {weeklySalesLoading ? (
-                                        <div className="flex h-full items-center justify-center">
-                                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                        </div>
-                                    ) : (
-                                        <BarChart data={weeklySales && weeklySales.length > 0 ? weeklySales : []}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-                                            <XAxis dataKey="day" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                            <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`} />
-                                            <Tooltip
-                                                formatter={(value: number) => [`LKR ${Number(value).toLocaleString()}`, '']}
-                                                contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)' }}
-                                            />
-                                            <Legend wrapperStyle={{ fontSize: 12 }} />
-                                            <Bar dataKey="dayShift" name="Day Shift" fill="#ff961e" radius={[4, 4, 0, 0]} />
-                                            <Bar dataKey="nightShift" name="Night Shift" fill="#03045E" radius={[4, 4, 0, 0]} />
-                                        </BarChart>
-                                    )}
-                                </ResponsiveContainer>
+                        <CardContent className="p-4 pt-0">
+                            <div className="-mx-4 md:mx-0 overflow-x-auto">
+                                <div className="min-w-[500px] md:min-w-0 h-[280px] w-full px-4 md:px-0">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        {weeklySalesLoading ? (
+                                            <div className="flex h-full items-center justify-center">
+                                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                            </div>
+                                        ) : (
+                                            <BarChart data={weeklySales && weeklySales.length > 0 ? weeklySales : []}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+                                                <XAxis dataKey="day" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                                                <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`} />
+                                                <Tooltip
+                                                    formatter={(value: number) => [`LKR ${Number(value).toLocaleString()}`, '']}
+                                                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)' }}
+                                                />
+                                                <Legend wrapperStyle={{ fontSize: 12 }} />
+                                                <Bar dataKey="dayShift" name="Day Shift" fill="#ff961e" radius={[4, 4, 0, 0]} />
+                                                <Bar dataKey="nightShift" name="Night Shift" fill="#03045E" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        )}
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -713,7 +779,7 @@ export default function DashboardPage() {
                                 </Button>
                             </div>
                         </CardHeader>
-                        <CardContent className="space-y-5">
+                        <CardContent className="space-y-4 p-4 pt-0">
                             {stockData.length > 0 ? (
                                 stockData.map((item, i) => (
                                     <StockProgressBar key={i} item={item} />
@@ -728,106 +794,234 @@ export default function DashboardPage() {
                     </Card>
                 </div>
 
-                {/* Right Column (1/3) */}
+                {/* Right Column - Tabs on mobile, stacked on desktop */}
                 <div className="space-y-6">
-
-                    {/* Alerts */}
-                    {dynamicAlerts.length > 0 && (
-                        <Card className="border-amber-200 bg-amber-50/50">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base flex items-center gap-2 text-amber-900">
-                                    <AlertTriangle className="w-5 h-5" />
-                                    Alerts ({dynamicAlerts.length})
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                {dynamicAlerts.map((alert) => (
-                                    <div key={alert.id} className="p-3 rounded-lg bg-white border border-amber-100">
-                                        <p className="text-sm font-medium text-foreground">{alert.title}</p>
-                                        <p className="text-xs text-muted-foreground mt-1">{alert.message}</p>
-                                        <Button variant="outline" size="sm" className="mt-2 h-7 text-xs" asChild>
-                                            <Link href={alert.href}>{alert.action}</Link>
+                    {/* Mobile: Tab navigation for sidebar sections */}
+                    <div className="lg:hidden">
+                        <Tabs defaultValue="alerts" className="w-full">
+                            <TabsList className="grid w-full grid-cols-3">
+                                <TabsTrigger value="alerts" className="text-xs">
+                                    <Bell className="w-4 h-4 mr-1" />
+                                    Alerts
+                                </TabsTrigger>
+                                <TabsTrigger value="staff" className="text-xs">
+                                    <UserCircle className="w-4 h-4 mr-1" />
+                                    Staff
+                                </TabsTrigger>
+                                <TabsTrigger value="orders" className="text-xs">
+                                    <ClipboardList className="w-4 h-4 mr-1" />
+                                    Orders
+                                </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="alerts" className="mt-4">
+                                {dynamicAlerts.length > 0 ? (
+                                    <Card className="border-amber-200 bg-amber-50/50">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-base flex items-center gap-2 text-amber-900">
+                                                <AlertTriangle className="w-5 h-5" />
+                                                Alerts ({dynamicAlerts.length})
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            {dynamicAlerts.map((alert) => (
+                                                <div key={alert.id} className="p-3 rounded-lg bg-white border border-amber-100">
+                                                    <p className="text-sm font-medium text-foreground">{alert.title}</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">{alert.message}</p>
+                                                    <Button variant="outline" size="sm" className="mt-2 h-7 text-xs" asChild>
+                                                        <Link href={alert.href}>{alert.action}</Link>
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </CardContent>
+                                    </Card>
+                                ) : (
+                                    <Card>
+                                        <CardContent className="py-8 text-center text-muted-foreground">
+                                            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                                            <p>No active alerts</p>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </TabsContent>
+                            <TabsContent value="staff" className="mt-4">
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-base">Staff Present</CardTitle>
+                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200">
+                                                {currentShiftInfo?.type === 'Night' ? <Moon className="w-3 h-3 mr-1" /> : <Sun className="w-3 h-3 mr-1" />}
+                                                {currentShiftInfo?.type || 'Day'} Shift
+                                            </Badge>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-3">
+                                            {staffOnDuty.length > 0 ? (
+                                                staffOnDuty.map((emp) => (
+                                                    <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                                                            {emp.name.charAt(0)}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium truncate">{emp.name}</p>
+                                                            <p className="text-xs text-muted-foreground">{emp.role}</p>
+                                                        </div>
+                                                        <span className="text-xs text-muted-foreground font-mono">{emp.timeIn}</span>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="text-center py-4 text-muted-foreground">
+                                                    <p>No active staff</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="w-full mt-3" asChild>
+                                            <Link href="/staff">Manage Staff →</Link>
                                         </Button>
-                                    </div>
-                                ))}
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
+                            <TabsContent value="orders" className="mt-4">
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-base">Recent Orders</CardTitle>
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <Link href="/inventory?tab=orders">View All</Link>
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-3">
+                                            {recentOrdersList.length > 0 ? (
+                                                recentOrdersList.map((order) => (
+                                                    <div key={order.id} className="flex flex-col gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <p className="text-sm font-medium">{order.product}</p>
+                                                                <p className="text-xs text-muted-foreground">{order.liters.toLocaleString()} L • {order.supplier}</p>
+                                                            </div>
+                                                            <OrderStatusBadge status={order.status} />
+                                                        </div>
+                                                        <div className="flex justify-between items-center text-xs text-muted-foreground">
+                                                            <span>{order.id}</span>
+                                                            <span>{order.time}</span>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="text-center py-4 text-muted-foreground">
+                                                    <p>No recent orders</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
+                        </Tabs>
+                    </div>
+
+                    {/* Desktop: Original stacked layout */}
+                    <div className="hidden lg:block space-y-6">
+
+                        {/* Alerts */}
+                        {dynamicAlerts.length > 0 && (
+                            <Card className="border-amber-200 bg-amber-50/50">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2 text-amber-900">
+                                        <AlertTriangle className="w-5 h-5" />
+                                        Alerts ({dynamicAlerts.length})
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    {dynamicAlerts.map((alert) => (
+                                        <div key={alert.id} className="p-3 rounded-lg bg-white border border-amber-100">
+                                            <p className="text-sm font-medium text-foreground">{alert.title}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">{alert.message}</p>
+                                            <Button variant="outline" size="sm" className="mt-2 h-7 text-xs" asChild>
+                                                <Link href={alert.href}>{alert.action}</Link>
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Staff Present */}
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-base">Staff Present</CardTitle>
+                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200">
+                                        {currentShiftInfo?.type === 'Night' ? <Moon className="w-3 h-3 mr-1" /> : <Sun className="w-3 h-3 mr-1" />}
+                                        {currentShiftInfo?.type || 'Day'} Shift
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                                <div className="space-y-3">
+                                    {staffOnDuty.length > 0 ? (
+                                        staffOnDuty.map((emp) => (
+                                            <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                                                    {emp.name.charAt(0)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate">{emp.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{emp.role}</p>
+                                                </div>
+                                                <span className="text-xs text-muted-foreground font-mono">{emp.timeIn}</span>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-4 text-muted-foreground">
+                                            <p>No active staff</p>
+                                        </div>
+                                    )}
+                                </div>
+                                <Button variant="ghost" size="sm" className="w-full mt-3" asChild>
+                                    <Link href="/staff">Manage Staff →</Link>
+                                </Button>
                             </CardContent>
                         </Card>
-                    )}
 
-                    {/* Staff Present */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-base">Staff Present</CardTitle>
-                                <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200">
-                                    {currentShiftInfo?.type === 'Night' ? <Moon className="w-3 h-3 mr-1" /> : <Sun className="w-3 h-3 mr-1" />}
-                                    {currentShiftInfo?.type || 'Day'} Shift
-                                </Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                {staffOnDuty.length > 0 ? (
-                                    staffOnDuty.map((emp) => (
-                                        <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                                                {emp.name.charAt(0)}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">{emp.name}</p>
-                                                <p className="text-xs text-muted-foreground">{emp.role}</p>
-                                            </div>
-                                            <span className="text-xs text-muted-foreground font-mono">{emp.timeIn}</span>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-4 text-muted-foreground">
-                                        <p>No active staff</p>
-                                    </div>
-                                )}
-                            </div>
-                            <Button variant="ghost" size="sm" className="w-full mt-3" asChild>
-                                <Link href="/staff">Manage Staff →</Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    {/* Recent Orders */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-base">Recent Orders</CardTitle>
-                                <Button variant="ghost" size="sm" asChild>
-                                    <Link href="/inventory?tab=orders">View All</Link>
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                {recentOrdersList.length > 0 ? (
-                                    recentOrdersList.map((order) => (
-                                        <div key={order.id} className="flex flex-col gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="text-sm font-medium">{order.product}</p>
-                                                    <p className="text-xs text-muted-foreground">{order.liters.toLocaleString()} L • {order.supplier}</p>
+                        {/* Recent Orders */}
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-base">Recent Orders</CardTitle>
+                                    <Button variant="ghost" size="sm" asChild>
+                                        <Link href="/inventory?tab=orders">View All</Link>
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                                <div className="space-y-3">
+                                    {recentOrdersList.length > 0 ? (
+                                        recentOrdersList.map((order) => (
+                                            <div key={order.id} className="flex flex-col gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <p className="text-sm font-medium">{order.product}</p>
+                                                        <p className="text-xs text-muted-foreground">{order.liters.toLocaleString()} L • {order.supplier}</p>
+                                                    </div>
+                                                    <OrderStatusBadge status={order.status} />
                                                 </div>
-                                                <OrderStatusBadge status={order.status} />
+                                                <div className="flex justify-between items-center text-xs text-muted-foreground">
+                                                    <span>{order.id}</span>
+                                                    <span>{order.time}</span>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between items-center text-xs text-muted-foreground">
-                                                <span>{order.id}</span>
-                                                <span>{order.time}</span>
-                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-4 text-muted-foreground">
+                                            <p>No recent orders</p>
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-4 text-muted-foreground">
-                                        <p>No recent orders</p>
-                                    </div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             </div>
         </div>
