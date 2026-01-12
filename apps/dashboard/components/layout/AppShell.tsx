@@ -21,7 +21,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
         <>
             <Sidebar />
-            <main className="flex-1 flex flex-col h-screen overflow-hidden relative pt-14 md:pt-0 md:ml-64 transition-all duration-300">
+            <main className="flex-1 flex flex-col h-screen overflow-hidden relative md:ml-64 transition-all duration-300">
+                {/* Mobile Header Spacer */}
+                <div className="md:hidden h-14 flex-shrink-0" />
+
                 <div className="flex-1 overflow-y-auto p-0">
                     {children}
                 </div>
