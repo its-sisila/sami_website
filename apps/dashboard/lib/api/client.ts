@@ -102,11 +102,12 @@ export class ApiClientError extends Error {
 }
 
 /**
- * Make an authenticated request to the API
+ * Make an authenticated request to the API with timeout and enhanced error handling
  */
 async function request<T>(
     endpoint: string,
     options: RequestInit = {},
+    timeout: number = 30000, // 30 second default timeout
 ): Promise<T> {
     const token = await getAccessToken();
 
@@ -121,28 +122,59 @@ async function request<T>(
         console.warn('[API Client] No auth token available for request:', endpoint);
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    if (!response.ok) {
-        let detail = 'An error occurred';
-        try {
-            const errorData: ApiError = await response.json();
-            detail = errorData.detail || detail;
-        } catch {
-            detail = response.statusText;
+    try {
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers,
+            signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            let detail = 'An error occurred';
+            let errorData: any = null;
+
+            try {
+                errorData = await response.json();
+                detail = errorData.detail || detail;
+            } catch {
+                detail = response.statusText;
+            }
+
+            // Import error types dynamically to avoid circular dependencies
+            const { parseApiError } = await import('@/lib/utils/error-utils');
+            throw parseApiError(response, errorData);
         }
-        throw new ApiClientError(response.status, detail);
-    }
 
-    // Handle 204 No Content
-    if (response.status === 204) {
-        return {} as T;
-    }
+        // Handle 204 No Content
+        if (response.status === 204) {
+            return {} as T;
+        }
 
-    return response.json();
+        return response.json();
+    } catch (error) {
+        clearTimeout(timeoutId);
+
+        // Handle abort/timeout errors
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            const { NetworkError } = await import('@/lib/api/error-types');
+            throw new NetworkError('Request timeout. Please try again.');
+        }
+
+        // Handle network errors
+        if (error instanceof TypeError) {
+            const { NetworkError } = await import('@/lib/api/error-types');
+            throw new NetworkError('Unable to connect to the server. Please check your network connection.', error);
+        }
+
+        // Re-throw other errors
+        throw error;
+    }
 }
 
 // ============================================================================
@@ -1170,6 +1202,39 @@ export const stations = {
 };
 
 // ============================================================================
+// Health Check
+// ============================================================================
+
+export const health = {
+    /**
+     * Check if backend API is reachable
+     * Returns true if healthy, throws NetworkError if not
+     */
+    check: async (): Promise<boolean> => {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout for health checks
+
+            const response = await fetch(`${API_BASE_URL}/health`, {
+                method: 'GET',
+                signal: controller.signal,
+            });
+
+            clearTimeout(timeout);
+            return response.ok;
+        } catch (error) {
+            const { NetworkError } = await import('@/lib/api/error-types');
+
+            if (error instanceof DOMException && error.name === 'AbortError') {
+                throw new NetworkError('Health check timeout');
+            }
+
+            throw new NetworkError('Backend server is not reachable');
+        }
+    },
+};
+
+// ============================================================================
 // Export all API modules
 // ============================================================================
 
@@ -1187,6 +1252,7 @@ export const api = {
     expenses,
     auth,
     stations,
+    health,
 };
 
 export default api;

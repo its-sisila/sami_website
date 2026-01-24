@@ -3,6 +3,7 @@ import { Inter } from "next/font/google"; // Switched to Inter as it's standard 
 import "./globals.css";
 import { AppShell } from "../components/layout/AppShell";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { BackendConnectionProvider } from "@/contexts/BackendConnectionContext";
 import { AlertSettingsProvider } from "@/lib/contexts/alert-settings";
 import { Toaster } from "sonner";
 
@@ -21,13 +22,15 @@ export default function RootLayout({
   return (
     <html lang="en" className="light" suppressHydrationWarning>
       <body className={`${inter.className} antialiased h-screen flex overflow-hidden bg-background`} suppressHydrationWarning>
-        <AuthProvider>
-          <AlertSettingsProvider>
-            <AppShell>
-              {children}
-            </AppShell>
-          </AlertSettingsProvider>
-        </AuthProvider>
+        <BackendConnectionProvider>
+          <AuthProvider>
+            <AlertSettingsProvider>
+              <AppShell>
+                {children}
+              </AppShell>
+            </AlertSettingsProvider>
+          </AuthProvider>
+        </BackendConnectionProvider>
         <Toaster richColors position="top-right" />
       </body>
     </html>
