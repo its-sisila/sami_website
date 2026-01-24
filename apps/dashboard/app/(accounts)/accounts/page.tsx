@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, FileText, CreditCard, Wallet, TrendingUp, Upload, CheckCircle2, Clock, Pencil, Sun, Moon, CalendarRange, Filter, Loader2, Trash2, ArrowUpCircle } from "lucide-react"
+import { PlusCircle, FileText, CreditCard, Wallet, TrendingUp, Upload, CheckCircle2, Clock, Pencil, Sun, Moon, CalendarRange, Filter, Loader2, Trash2, ArrowUpCircle, Users, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -60,64 +60,7 @@ import { withRetry } from "@/lib/utils"
 
 type TimeRange = "Today" | "7 Days" | "Month" | "Year" | "All Time" | "Specific Date"
 
-const MOCK_CURRENT_DATE = new Date("2025-12-20") // Fixed "Today" for demo
-
-const isWithinRange = (dateStr: string, range: TimeRange, specificDate?: Date): boolean => {
-    const date = new Date(dateStr)
-    const diffTime = MOCK_CURRENT_DATE.getTime() - date.getTime()
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-    if (range === "Today") return diffDays === 0
-    if (range === "7 Days") return diffDays >= 0 && diffDays <= 7
-    if (range === "Month") return diffDays >= 0 && diffDays <= 30
-    if (range === "Year") return diffDays >= 0 && diffDays <= 365
-    if (range === "Specific Date" && specificDate) {
-        return date.toISOString().split('T')[0] === specificDate.toISOString().split('T')[0]
-    }
-    return true // All Time
-}
-
-const getMultiplier = (range: TimeRange): number => {
-    if (range === "Today") return 1
-    if (range === "7 Days") return 7
-    if (range === "Month") return 30
-    if (range === "Year") return 365
-    if (range === "Specific Date") return 1
-    return 1 // All Time fallback
-}
-
-const getTrendData = (range: string) => {
-    // Generate mock trend data based on range
-    const data = []
-    const points = range === "7 Days" ? 7 : range === "Month" ? 30 : 12;
-    const isMonthly = range === "Year";
-
-    for (let i = 0; i < points; i++) {
-        const d = new Date(MOCK_CURRENT_DATE)
-        if (isMonthly) {
-            d.setMonth(d.getMonth() - (points - 1 - i))
-        } else {
-            d.setDate(d.getDate() - (points - 1 - i))
-        }
-
-        const name = isMonthly
-            ? d.toLocaleDateString('en-US', { month: 'short' })
-            : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-
-        // Mock randomized reasonable values
-        const baseSales = 500000 + (Math.random() * 100000)
-        const baseVerified = 450000 + (Math.random() * 120000)
-
-        data.push({
-            name,
-            totalSalesAmount: Math.round(baseSales),
-            verifiedFunds: Math.round(baseVerified)
-        })
-    }
-    return data
-}
-
-// --- Mock Data ---
+// --- Type Definitions ---
 
 interface CompanyAccount {
     id: string
@@ -130,14 +73,6 @@ interface CompanyAccount {
     email?: string
 }
 
-const companies: CompanyAccount[] = [
-    { id: "1", name: "ABC Logistics", contactPerson: "John Doe", contactNumber: "077-1234567", creditLimit: 500000, currentBalance: 125000, address: "123, Logistics Way, Colombo 01", email: "john@abc.com" },
-    { id: "2", name: "City Taxis", contactPerson: "Jane Smith", contactNumber: "071-9876543", creditLimit: 100000, currentBalance: -5000, address: "45, Taxi Stand, Kandy", email: "jane@citytaxis.com" }, // Credit/Overpaid
-    { id: "3", name: "Green Farms", contactPerson: "Mike Brown", contactNumber: "076-5551234", creditLimit: 750000, currentBalance: 450000, address: "No 5, Farm Road, Nuwara Eliya", email: "mike@greenfarms.lk" },
-    { id: "4", name: "Metro Bus Svc", contactPerson: "Sarah Lee", contactNumber: "011-2345678", creditLimit: 2000000, currentBalance: 0, address: "Central Bus Stand, Pettah", email: "accts@metrobus.lk" },
-    { id: "5", name: "Tech Solutions", contactPerson: "David Kim", contactNumber: "077-8889999", creditLimit: 300000, currentBalance: 320000, address: "Tech Park, Malabe", email: "david@techsol.com" }, // Over limit
-]
-
 interface Terminal {
     id: string
     provider: "VISA/MASTER" | "AMEX"
@@ -145,15 +80,6 @@ interface Terminal {
     bankAccount: string
     status: "active" | "offline"
 }
-
-const terminals: Terminal[] = [
-    { id: "1", provider: "VISA/MASTER", terminalId: "40203510", bankAccount: "DFCC - 4035", status: "active" },
-    { id: "2", provider: "VISA/MASTER", terminalId: "40203511", bankAccount: "DFCC - 4035", status: "active" },
-    { id: "3", provider: "VISA/MASTER", terminalId: "40203512", bankAccount: "DFCC - 4035", status: "active" },
-    { id: "4", provider: "AMEX", terminalId: "93501476", bankAccount: "DFCC - 1102", status: "active" },
-    { id: "5", provider: "AMEX", terminalId: "93501484", bankAccount: "DFCC - 1102", status: "active" },
-    { id: "6", provider: "AMEX", terminalId: "93501492", bankAccount: "DFCC - 1102", status: "active" },
-]
 
 interface Settlement {
     id: string
@@ -165,57 +91,6 @@ interface Settlement {
     status: "Settled" | "Pending" | "Verified"
     shift: "Day" | "Night"
 }
-// Generate 12 months of mock settlement data
-function generateMockSettlements(): Settlement[] {
-    const settlements: Settlement[] = []
-    const terminalIds = ["40203510", "40203511", "40203512", "93501476", "93501484", "93501492"]
-    let id = 1
-
-    for (let monthOffset = 11; monthOffset >= 0; monthOffset--) {
-        const monthDate = new Date(MOCK_CURRENT_DATE.getFullYear(), MOCK_CURRENT_DATE.getMonth() - monthOffset, 1)
-        const year = monthDate.getFullYear()
-        const month = monthDate.getMonth() + 1
-        const daysInMonth = new Date(year, month, 0).getDate()
-
-        // Generate ~20 settlements per month (multiple per day for different terminals)
-        for (let day = 1; day <= daysInMonth; day += 2) {
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-
-            // Random terminal for each settlement
-            const terminalIdx = Math.floor(Math.random() * terminalIds.length)
-            const amount = 80000 + Math.floor(Math.random() * 150000)
-
-            // Most are verified, some settled, few pending (only recent ones)
-            let status: Settlement["status"] = "Verified"
-            if (monthOffset === 0 && day > 15) {
-                status = Math.random() > 0.5 ? "Pending" : "Settled"
-            } else if (monthOffset === 0) {
-                status = "Settled"
-            }
-
-            const shift = day % 2 === 0 ? "Night" : "Day"
-            // Generate random time based on shift
-            const hour = shift === "Day" ? 8 + Math.floor(Math.random() * 10) : 18 + Math.floor(Math.random() * 6)
-            const minute = Math.floor(Math.random() * 60)
-            const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-
-            settlements.push({
-                id: String(id++),
-                batchId: `#B-${String(id).padStart(3, '0')}`,
-                date: dateStr,
-                time: timeStr,
-                terminalId: terminalIds[terminalIdx],
-                amount,
-                status,
-                shift
-            })
-        }
-    }
-
-    return settlements.sort((a, b) => b.date.localeCompare(a.date)) // Sort newest first
-}
-
-const MOCK_SETTLEMENTS = generateMockSettlements()
 
 interface Deposit {
     id: string
@@ -228,8 +103,6 @@ interface Deposit {
     shift: "Day" | "Night"
 }
 
-const MOCK_DEPOSITS: Deposit[] = []
-
 interface Expense {
     id: string
     category: string
@@ -241,106 +114,12 @@ interface Expense {
     shift: "Day" | "Night"
 }
 
-// Category to Payee mapping (from Sales page)
+// Standard expense categories (used for grouping display)
 const EXPENSE_CATEGORIES = ["Salary", "Transport", "Bowser", "Bills", "Utilities", "Refreshments", "Maintenance", "Office Supplies", "Other"];
 
-const CATEGORY_PAYEES: Record<string, string[]> = {
-    "Salary": ["K. Perera", "S. Silva", "N. Fernando", "C. De Silva", "Other"],
-    "Transport": ["Threewheeler", "Bike", "Other"],
-    "Bowser": ["Bowser Highway", "Bowser Repair", "Other"],
-    "Bills": ["Dialog", "SLT", "Credit Card Payment", "Chairman Vehicle Fuel", "Other"],
-    "Utilities": ["CEB", "LECO", "Water Board", "Tax", "Lease", "Generator Fuel", "Other"],
-    "Refreshments": ["Soft Drinks", "Lunch", "Snacks", "Bottled Water", "Other"],
-    "Maintenance": ["Electrician", "Plumber", "AC Technician", "Pump Technician", "General Repair", "Other"],
-    "Office Supplies": ["Stationery", "Printing", "Computer Accessories", "Cleaning Supplies", "Other"],
-    "Other": ["Other"],
-};
-
-// Generate 12 months of mock expense data
-function generateMockExpenses(): Expense[] {
-    const expenses: Expense[] = []
-    let id = 1
-
-    // Generate for last 12 months
-    for (let monthOffset = 11; monthOffset >= 0; monthOffset--) {
-        const monthDate = new Date(MOCK_CURRENT_DATE.getFullYear(), MOCK_CURRENT_DATE.getMonth() - monthOffset, 1)
-        const year = monthDate.getFullYear()
-        const month = monthDate.getMonth() + 1
-        const monthStr = `${year}-${String(month).padStart(2, '0')}`
-        const monthName = monthDate.toLocaleDateString('en-US', { month: 'long' })
-
-        // Salary payments on 25th of each month
-        const salaryDate = `${monthStr}-25`
-        expenses.push(
-            { id: `EXP-SAL-${id++}`, category: "Salary", payee: "K. Perera", description: `${monthName} Salary - 25 shifts`, amount: 35500 + Math.floor(Math.random() * 5000), date: salaryDate, shift: "Day", invoiceNumber: "" },
-            { id: `EXP-SAL-${id++}`, category: "Salary", payee: "S. Silva", description: `${monthName} Salary - 27 shifts`, amount: 40500 + Math.floor(Math.random() * 4000), date: salaryDate, shift: "Day", invoiceNumber: "" },
-            { id: `EXP-SAL-${id++}`, category: "Salary", payee: "N. Fernando", description: `${monthName} Salary + OT`, amount: 62000 + Math.floor(Math.random() * 8000), date: salaryDate, shift: "Day", invoiceNumber: "" },
-            { id: `EXP-SAL-${id++}`, category: "Salary", payee: "C. De Silva", description: `${monthName} Salary - 26 shifts`, amount: 56200 + Math.floor(Math.random() * 6000), date: salaryDate, shift: "Day", invoiceNumber: "" }
-        )
-
-        // Utilities - around 20th
-        const utilityDate = `${monthStr}-20`
-        expenses.push(
-            { id: `EXP-${id++}`, category: "Utilities", payee: "CEB", description: `Electricity ${monthName}`, amount: 120000 + Math.floor(Math.random() * 30000), date: utilityDate, shift: "Day", invoiceNumber: `CEB-${monthStr}` },
-            { id: `EXP-${id++}`, category: "Utilities", payee: "Water Board", description: `Water ${monthName}`, amount: 8000 + Math.floor(Math.random() * 3000), date: utilityDate, shift: "Day", invoiceNumber: `WB-${id}` }
-        )
-
-        // Bills - around 22nd
-        const billsDate = `${monthStr}-22`
-        expenses.push(
-            { id: `EXP-${id++}`, category: "Bills", payee: "Dialog", description: `Office Landline - ${monthName}`, amount: 5000 + Math.floor(Math.random() * 2000), date: billsDate, shift: "Day", invoiceNumber: `DLG-${id}` },
-            { id: `EXP-${id++}`, category: "Bills", payee: "SLT", description: `Internet - ${monthName}`, amount: 8500 + Math.floor(Math.random() * 1500), date: billsDate, shift: "Day", invoiceNumber: `SLT-${id}` }
-        )
-
-        // Transport - scattered across month
-        for (let day = 5; day <= 25; day += 7) {
-            const transportDate = `${monthStr}-${String(day).padStart(2, '0')}`
-            expenses.push(
-                { id: `EXP-${id++}`, category: "Transport", payee: "Threewheeler", description: "To Bank", amount: 400 + Math.floor(Math.random() * 200), date: transportDate, shift: "Day", invoiceNumber: "" }
-            )
-        }
-
-        // Maintenance - 1-2 per month
-        const maintDate = `${monthStr}-15`
-        if (Math.random() > 0.3) {
-            expenses.push(
-                { id: `EXP-${id++}`, category: "Maintenance", payee: "Pump Technician", description: "Pump service", amount: 10000 + Math.floor(Math.random() * 15000), date: maintDate, shift: "Day", invoiceNumber: `MNT-${id}` }
-            )
-        }
-
-        // Refreshments - weekly
-        for (let day = 3; day <= 24; day += 7) {
-            const refreshDate = `${monthStr}-${String(day).padStart(2, '0')}`
-            expenses.push(
-                { id: `EXP-${id++}`, category: "Refreshments", payee: "Lunch", description: "Staff lunch", amount: 3500 + Math.floor(Math.random() * 2000), date: refreshDate, shift: "Day", invoiceNumber: "" }
-            )
-        }
-
-        // Generator fuel - once per month
-        expenses.push(
-            { id: `EXP-${id++}`, category: "Utilities", payee: "Generator Fuel", description: "Diesel for generator", amount: 12000 + Math.floor(Math.random() * 8000), date: `${monthStr}-10`, shift: "Night", invoiceNumber: "" }
-        )
-
-        // Bowser - once per month
-        expenses.push(
-            { id: `EXP-${id++}`, category: "Bowser", payee: "Bowser Highway", description: "Fuel delivery transport", amount: 30000 + Math.floor(Math.random() * 15000), date: `${monthStr}-12`, shift: "Day", invoiceNumber: `BWS-${id}` }
-        )
-    }
-
-    return expenses.sort((a, b) => b.date.localeCompare(a.date)) // Sort newest first
-}
-
-const MOCK_EXPENSES = generateMockExpenses()
-
 // --- Components ---
 
-// --- Mock Sales Data for Working Capital ---
-const MOCK_SALES_DATA = {
-    dayShift: { total: 1250000, date: "2024-10-15" },
-    nightShift: { total: 950000, date: "2024-10-15" }
-}
 
-// --- Components ---
 
 function WorkingCapitalView({ deposits, settlements }: { deposits: Deposit[], settlements: Settlement[] }) {
     const [timeRange, setTimeRange] = React.useState<TimeRange>("Today")
@@ -764,30 +543,77 @@ function CompanyAccountsTable({ companies }: CompanyAccountsTableProps) {
 
     return (
         <div className="space-y-6">
-            {/* Summary Cards */}
-            <div className="grid gap-4 md:grid-cols-4">
-                <Card className="border-l-4 border-l-blue-500">
-                    <CardContent className="pt-4">
-                        <div className="text-sm text-muted-foreground">Total Companies</div>
-                        <div className="text-2xl font-bold">{companies.length}</div>
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+                {/* Total Companies */}
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
+                    <CardContent className="p-3 lg:p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs lg:text-sm font-medium text-blue-700">Total Companies</p>
+                                <p className="text-lg lg:text-2xl font-bold text-blue-600 mt-0.5">
+                                    {companies.length}
+                                </p>
+                            </div>
+                            <div className="h-8 w-8 lg:h-10 lg:w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                                <Users className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
-                <Card className="border-l-4 border-l-orange-500">
-                    <CardContent className="pt-4">
-                        <div className="text-sm text-muted-foreground">Total Outstanding</div>
-                        <div className="text-2xl font-bold text-orange-600">LKR {totalOutstanding.toLocaleString()}</div>
+
+                {/* Total Outstanding */}
+                <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200">
+                    <CardContent className="p-3 lg:p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs lg:text-sm font-medium text-orange-700">Total Outstanding</p>
+                                <p className="text-lg lg:text-2xl font-bold text-orange-600 mt-0.5">
+                                    <span className="text-xs lg:text-sm font-normal">LKR </span>
+                                    {totalOutstanding.toLocaleString()}
+                                </p>
+                            </div>
+                            <div className="h-8 w-8 lg:h-10 lg:w-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                                <Wallet className="h-4 w-4 lg:h-5 lg:w-5 text-orange-600" />
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
-                <Card className="border-l-4 border-l-green-500">
-                    <CardContent className="pt-4">
-                        <div className="text-sm text-muted-foreground">Total Credit Limit</div>
-                        <div className="text-2xl font-bold text-green-600">LKR {totalCreditLimit.toLocaleString()}</div>
+
+                {/* Total Credit Limit */}
+                <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200">
+                    <CardContent className="p-3 lg:p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs lg:text-sm font-medium text-green-700">Total Credit Limit</p>
+                                <p className="text-lg lg:text-2xl font-bold text-green-600 mt-0.5">
+                                    <span className="text-xs lg:text-sm font-normal">LKR </span>
+                                    {totalCreditLimit.toLocaleString()}
+                                </p>
+                            </div>
+                            <div className="h-8 w-8 lg:h-10 lg:w-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                                <TrendingUp className="h-4 w-4 lg:h-5 lg:w-5 text-green-600" />
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
-                <Card className="border-l-4 border-l-red-500">
-                    <CardContent className="pt-4">
-                        <div className="text-sm text-muted-foreground">Over Limit</div>
-                        <div className="text-2xl font-bold text-red-600">{overLimitCount} {overLimitCount === 1 ? 'Company' : 'Companies'}</div>
+
+                {/* Over Limit */}
+                <Card className="bg-gradient-to-br from-red-50 to-red-100/50 border-red-200">
+                    <CardContent className="p-3 lg:p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs lg:text-sm font-medium text-red-700">
+                                    Over Limit <span className="text-red-500">({overLimitCount})</span>
+                                </p>
+                                <p className="text-lg lg:text-2xl font-bold text-red-600 mt-0.5">
+                                    {overLimitCount} {overLimitCount === 1 ? 'Company' : 'Companies'}
+                                </p>
+                            </div>
+                            <div className="h-8 w-8 lg:h-10 lg:w-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                                <AlertTriangle className="h-4 w-4 lg:h-5 lg:w-5 text-red-600" />
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
@@ -936,11 +762,8 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                 status: t.status === 'active' ? 'active' : 'offline' as 'active' | 'offline'
             }))
         }
-        // Fallback to mock data (only if DISABLE_MOCK_DATA is false)
-        if (process.env.NEXT_PUBLIC_DISABLE_MOCK_DATA === 'true') {
-            return []
-        }
-        return terminals
+        // No API data, return empty array
+        return []
     }, [apiTerminals])
 
     // Map API card settlements to local format, fallback to mock/props
@@ -957,11 +780,8 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
                 shift: 'Day' as const
             }))
         }
-        // Fallback to mock data (only if DISABLE_MOCK_DATA is false)
-        if (process.env.NEXT_PUBLIC_DISABLE_MOCK_DATA === 'true') {
-            return []
-        }
-        return settlements
+        // No API data, return empty array
+        return []
     }, [apiCardSettlements, settlements])
 
     const [localTerminals, setLocalTerminals] = React.useState(mappedTerminals)
@@ -979,7 +799,7 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
     // Month filter
     const monthOptions = React.useMemo(() => {
         const options: { value: string; label: string }[] = []
-        const today = MOCK_CURRENT_DATE
+        const today = new Date()
         for (let i = 0; i < 12; i++) {
             const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
             const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -989,7 +809,8 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
         return options
     }, [])
 
-    const [selectedMonth, setSelectedMonth] = React.useState(`${MOCK_CURRENT_DATE.getFullYear()}-${String(MOCK_CURRENT_DATE.getMonth() + 1).padStart(2, '0')}`)
+    const currentMonthValue = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    const [selectedMonth, setSelectedMonth] = React.useState(currentMonthValue)
 
     // Filter settlements by month
     const filteredSettlements = React.useMemo(() => {
@@ -1015,7 +836,7 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
     // Add Settlement State
     const [isAddingSettlement, setIsAddingSettlement] = React.useState(false)
     const [newSettlement, setNewSettlement] = React.useState<Partial<Settlement & { time: string }>>({
-        date: MOCK_CURRENT_DATE.toISOString().split('T')[0],
+        date: new Date().toISOString().split('T')[0],
         time: "09:00",
         status: "Pending",
         shift: "Day"
@@ -1103,7 +924,7 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
 
             setIsAddingSettlement(false)
             setNewSettlement({
-                date: MOCK_CURRENT_DATE.toISOString().split('T')[0],
+                date: new Date().toISOString().split('T')[0],
                 time: "09:00",
                 status: "Pending",
                 shift: "Day"
@@ -1268,7 +1089,7 @@ function CardTerminalsView({ settlements, onVerifySettlement }: CardTerminalsVie
     // Chart period filter
     const [chartPeriod, setChartPeriod] = React.useState<"monthly" | "yearly">("monthly")
     const [chartMonth, setChartMonth] = React.useState(selectedMonth) // YYYY-MM
-    const [chartYear, setChartYear] = React.useState(MOCK_CURRENT_DATE.getFullYear().toString())
+    const [chartYear, setChartYear] = React.useState(new Date().getFullYear().toString())
 
     // Get available years from data
     const availableYears = React.useMemo(() => {
@@ -1978,7 +1799,7 @@ function DepositsView({ deposits }: DepositsViewProps) {
         method: "",
         amount: 0,
         ref: "",
-        date: MOCK_CURRENT_DATE.toISOString().split('T')[0],
+        date: new Date().toISOString().split('T')[0],
         shift: "Day"
     })
 
@@ -2093,7 +1914,7 @@ function DepositsView({ deposits }: DepositsViewProps) {
                 method: "",
                 amount: 0,
                 ref: "",
-                date: MOCK_CURRENT_DATE.toISOString().split('T')[0],
+                date: new Date().toISOString().split('T')[0],
                 shift: "Day"
             })
             setIsSavingDeposit(false)
@@ -2136,7 +1957,7 @@ function DepositsView({ deposits }: DepositsViewProps) {
     }
 
     // Date filter state - default to today
-    const todayStr = MOCK_CURRENT_DATE.toISOString().split('T')[0]
+    const todayStr = new Date().toISOString().split('T')[0]
     const [filterFromDate, setFilterFromDate] = React.useState(todayStr)
     const [filterToDate, setFilterToDate] = React.useState(todayStr)
 
@@ -2464,7 +2285,7 @@ function ExpensesView() {
     // Month selector - generate options for last 12 months
     const monthOptions = React.useMemo(() => {
         const options: { value: string; label: string }[] = []
-        const today = MOCK_CURRENT_DATE
+        const today = new Date()
         for (let i = 0; i < 12; i++) {
             const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
             const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -2474,7 +2295,8 @@ function ExpensesView() {
         return options
     }, [])
 
-    const [selectedMonth, setSelectedMonth] = React.useState("2025-12")
+    const currentMonthValue = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    const [selectedMonth, setSelectedMonth] = React.useState(currentMonthValue)
     const [expandedPayee, setExpandedPayee] = React.useState<string | null>(null) // "category:payee" format
 
     // Map API data to local format, fallback to mock data
@@ -2491,11 +2313,8 @@ function ExpensesView() {
                 shift: 'Day' as const // API doesn't track shift yet
             }))
         }
-        // Fallback to mock data (only if DISABLE_MOCK_DATA is false)
-        if (process.env.NEXT_PUBLIC_DISABLE_MOCK_DATA === 'true') {
-            return []
-        }
-        return MOCK_EXPENSES
+        // No API data, return empty array
+        return []
     }, [apiExpenses])
 
     // Filter expenses by selected month
@@ -2568,7 +2387,7 @@ function ExpensesView() {
     // Generate yearly chart data - monthly totals for last 12 months
     const yearlyChartData = React.useMemo(() => {
         const data: { month: string; amount: number }[] = []
-        const today = MOCK_CURRENT_DATE
+        const today = new Date()
 
         for (let i = 11; i >= 0; i--) {
             const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
@@ -2810,8 +2629,8 @@ function ExpensesView() {
 }
 
 export default function AccountsPage() {
-    const [deposits, setDeposits] = React.useState<Deposit[]>(MOCK_DEPOSITS)
-    const [settlements, setSettlements] = React.useState<Settlement[]>(MOCK_SETTLEMENTS)
+    const [deposits, setDeposits] = React.useState<Deposit[]>([])
+    const [settlements, setSettlements] = React.useState<Settlement[]>([])
 
     // Fetch company accounts from API
     const { data: apiAccounts, error: accountsError, isLoading: accountsLoading } = useAccounts()
@@ -2831,7 +2650,8 @@ export default function AccountsPage() {
                 email: acc.email || ""
             }))
         }
-        return companies
+        // No API data, return empty array
+        return []
     }, [apiAccounts])
 
     // Add Company State
