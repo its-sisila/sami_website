@@ -9,7 +9,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, func, and_, delete
+from sqlalchemy import select, func, and_, delete, case
+from sqlalchemy.sql.functions import coalesce
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -299,8 +300,8 @@ async def get_weekly_sales(
     db: AsyncSession
 ) -> list[dict]:
     """
-    Get aggregated sales stats for weekly chart (Financial Trends).
-    Returns Sales Amount vs Verified Funds per day.
+    Get aggregated sales stats for weekly chart (Financial Trends + Sales Split).
+    Returns Sales Amount (Day vs Night) and Verified Funds per day.
     """
     # 1. Sales per shift
     sales_sub = (
@@ -334,15 +335,41 @@ async def get_weekly_sales(
         .subquery()
     )
     
-    # Main query: Group by Shift Date (aggregating day+night)
+    # Main query: Group by Shift Date
+    # We need to sum sales for day vs night shifts separately
+    # Using case statements inside sum
+    
+    # CASE statement for day sales: SUM(CASE WHEN shift_type = 'day' THEN total_sales ELSE 0 END)
+    # But we are joining on shift_id.
+    # We can group by shift_date.
+    
     stmt = (
         select(
             Shift.shift_date,
+            # Total Sales
             func.sum(func.coalesce(sales_sub.c.total_sales, 0)).label("total_sales"),
+            
+            # Verified Funds (Cash + Card)
             func.sum(
                 func.coalesce(cash_sub.c.verified_cash, 0) + 
                 func.coalesce(card_sub.c.verified_card, 0)
-            ).label("verified_funds")
+            ).label("verified_funds"),
+            
+            # Day Shift Sales
+            func.sum(
+                 case(
+                     (Shift.shift_type == ShiftType.day, func.coalesce(sales_sub.c.total_sales, 0)),
+                     else_=0
+                 )
+            ).label("day_sales"),
+
+            # Night Shift Sales
+             func.sum(
+                 case(
+                     (Shift.shift_type == ShiftType.night, func.coalesce(sales_sub.c.total_sales, 0)),
+                     else_=0
+                 )
+            ).label("night_sales")
         )
         .outerjoin(sales_sub, Shift.id == sales_sub.c.shift_id)
         .outerjoin(cash_sub, Shift.id == cash_sub.c.shift_id)
@@ -363,13 +390,36 @@ async def get_weekly_sales(
     
     # Build list for chart
     stats = []
-    for r in rows:
+    from datetime import timedelta
+    
+    # Helper to map result date to row
+    row_map = {r.shift_date: r for r in rows}
+    
+    # Fill gaps with zero if needed, or just return existing rows
+    # Frontend expects contiguous dates usually, but AreaChart handles gaps by interpolation or missing points.
+    # Let's verify if we need to fill gaps. 
+    # For now, let's just return what we have, iterating through range could be safer but maybe not needed if DB has data.
+    # Actually, if there are no shifts on a day, it won't be returned.
+    
+    # Iterate from start to end date to ensure all days are present (better for charts)
+    current = start_date
+    while current <= end_date:
+        r = row_map.get(current)
+        day_sales = r.day_sales if r else 0
+        night_sales = r.night_sales if r else 0
+        total_sales = r.total_sales if r else 0
+        verified_funds = r.verified_funds if r else 0
+        
         stats.append({
-            "date": r.shift_date,
-            "name": r.shift_date.strftime("%b %d"), # e.g. "Oct 24"
-            "totalSalesAmount": r.total_sales,
-            "verifiedFunds": r.verified_funds
+            "day": current.strftime("%a"), # e.g. "Mon" (for X-axis short name request)
+            "date": current,
+            "name": current.strftime("%b %d"), # e.g. "Oct 24"
+            "totalSalesAmount": total_sales,
+            "verifiedFunds": verified_funds,
+            "dayShift": day_sales,
+            "nightShift": night_sales
         })
+        current += timedelta(days=1)
             
     return stats
 
