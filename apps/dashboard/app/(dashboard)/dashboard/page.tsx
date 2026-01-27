@@ -59,7 +59,8 @@ import {
 import { useTanks, useOrders, useActiveEmployees, useCurrentShift, useShiftSummary, useWeeklySales, useDailySales, useLatestShift, useDailyAttendance, useEmployees, useCurrentUser } from "@/lib/hooks";
 import { useAlertSettings } from "@/lib/contexts/alert-settings";
 import { ModernMetricCard } from "@/components/dashboard/ModernMetricCard";
-import { DateRangePicker } from "@/components/dashboard/DateRangePicker";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 
 
@@ -191,6 +192,7 @@ export default function DashboardPage() {
     const defaultFrom = new Date();
     defaultFrom.setDate(defaultTo.getDate() - 6);
 
+    const [timeRange, setTimeRange] = useState<string>("7 Days");
     const [dateRange, setDateRange] = useState<{
         from: Date | undefined;
         to: Date | undefined;
@@ -198,6 +200,24 @@ export default function DashboardPage() {
         from: defaultFrom,
         to: defaultTo,
     });
+
+    // Handle Time Range Changes
+    useEffect(() => {
+        const to = new Date();
+        const from = new Date();
+
+        if (timeRange === "7 Days") {
+            from.setDate(to.getDate() - 6);
+        } else if (timeRange === "30 Days") {
+            from.setDate(to.getDate() - 29);
+        } else if (timeRange === "Month") {
+            from.setDate(1); // 1st of current month
+        } else if (timeRange === "Custom") {
+            return; // Don't auto-update, let user pick
+        }
+
+        setDateRange({ from, to });
+    }, [timeRange]);
 
     // Calculate dates for hook
     const startDate = dateRange?.from ? dateRange.from.toISOString().split('T')[0] : "";
@@ -688,10 +708,51 @@ export default function DashboardPage() {
                                 <p className="text-sm text-slate-500 font-medium">Revenue performance over time</p>
                             </div>
                             <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
-                                <DateRangePicker
-                                    date={dateRange}
-                                    setDate={setDateRange}
-                                />
+                                <div className="flex items-center gap-2">
+                                    <Select value={timeRange} onValueChange={setTimeRange}>
+                                        <SelectTrigger className="w-[140px] h-9">
+                                            <SelectValue placeholder="Select Range" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="7 Days">Last 7 Days</SelectItem>
+                                            <SelectItem value="30 Days">Last 30 Days</SelectItem>
+                                            <SelectItem value="Month">This Month</SelectItem>
+                                            <SelectItem value="Custom">Custom Range</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+
+                                    {timeRange === "Custom" && dateRange && (
+                                        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                                            <div className="grid gap-1">
+                                                <Label htmlFor="from-date" className="sr-only">From</Label>
+                                                <Input
+                                                    id="from-date"
+                                                    type="date"
+                                                    className="h-9 w-[130px]"
+                                                    value={dateRange.from ? dateRange.from.toISOString().split('T')[0] : ''}
+                                                    onChange={(e) => {
+                                                        const d = e.target.value ? new Date(e.target.value) : undefined;
+                                                        setDateRange(prev => ({ ...prev, from: d, to: prev?.to }));
+                                                    }}
+                                                />
+                                            </div>
+                                            <span className="text-slate-400">-</span>
+                                            <div className="grid gap-1">
+                                                <Label htmlFor="to-date" className="sr-only">To</Label>
+                                                <Input
+                                                    id="to-date"
+                                                    type="date"
+                                                    className="h-9 w-[130px]"
+                                                    value={dateRange.to ? dateRange.to.toISOString().split('T')[0] : ''}
+                                                    onChange={(e) => {
+                                                        const d = e.target.value ? new Date(e.target.value) : undefined;
+                                                        setDateRange(prev => ({ ...prev, from: prev?.from, to: d }));
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="hidden sm:flex items-center gap-2">
                                     <span className="flex items-center text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
                                         <div className="w-2 h-2 rounded-full bg-orange-500 mr-1.5"></div> Day
