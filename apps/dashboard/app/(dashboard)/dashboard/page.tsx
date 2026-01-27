@@ -26,7 +26,15 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-    LineChart,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    AreaChart,
+    Area,
     BarChart,
     Bar,
     Line,
@@ -48,10 +56,13 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { useTanks, useOrders, useActiveEmployees, useCurrentShift, useShiftSummary, useWeeklySales, useDailySales, useLatestShift, useDailyAttendance, useEmployees } from "@/lib/hooks";
+import { useTanks, useOrders, useActiveEmployees, useCurrentShift, useShiftSummary, useWeeklySales, useDailySales, useLatestShift, useDailyAttendance, useEmployees, useCurrentUser } from "@/lib/hooks";
 import { useAlertSettings } from "@/lib/contexts/alert-settings";
+import { ModernMetricCard } from "@/components/dashboard/ModernMetricCard";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { motion } from "framer-motion";
 
-// --- Mock Data ---
 
 // --- Constants ---
 interface DashboardAlert {
@@ -84,48 +95,6 @@ const PLACEHOLDER_METRICS: MetricItem[] = [
 // --- Components ---
 
 // --- Components ---
-
-function MetricCard({ item }: { item: MetricItem }) {
-    const Icon = item.icon;
-
-    // Color configurations similar to Inventory page
-    const colorStyles = {
-        slate: { bg: "bg-gradient-to-br from-slate-50 to-slate-100", border: "border-slate-200", iconBg: "bg-slate-100", iconText: "text-slate-600" },
-        emerald: { bg: "bg-gradient-to-br from-emerald-50 to-emerald-100", border: "border-emerald-200", iconBg: "bg-emerald-100", iconText: "text-emerald-600" },
-        amber: { bg: "bg-gradient-to-br from-amber-50 to-amber-100", border: "border-amber-200", iconBg: "bg-amber-100", iconText: "text-amber-600" },
-        violet: { bg: "bg-gradient-to-br from-violet-50 to-violet-100", border: "border-violet-200", iconBg: "bg-violet-100", iconText: "text-violet-600" },
-        rose: { bg: "bg-gradient-to-br from-rose-50 to-rose-100", border: "border-rose-200", iconBg: "bg-rose-100", iconText: "text-rose-600" },
-        sky: { bg: "bg-gradient-to-br from-sky-50 to-sky-100", border: "border-sky-200", iconBg: "bg-sky-100", iconText: "text-sky-600" },
-        default: { bg: "bg-card", border: "border-border", iconBg: "bg-muted", iconText: "text-muted-foreground" },
-    };
-
-    const style = item.color ? colorStyles[item.color] : colorStyles.default;
-
-    return (
-        <Link href={item.href}>
-            <Card className={`hover:shadow-md transition-all hover:scale-[1.02] cursor-pointer h-full border ${style.bg} ${style.border}`}>
-                <CardContent className="p-3 md:p-4 flex flex-col justify-between h-full">
-                    <div className="flex justify-between items-start mb-2">
-                        <div className={`p-1.5 md:p-2 rounded-lg ${style.iconBg}`}>
-                            <Icon className={`w-4 h-4 md:w-5 md:h-5 ${style.iconText}`} />
-                        </div>
-                        {item.trend && (
-                            <Badge variant="outline" className={`px-1.5 py-0 h-5 md:h-6 text-[10px] md:text-xs ${item.trendUp ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-rose-100 text-rose-700 border-rose-200"}`}>
-                                {item.trendUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-                                {item.trend}
-                            </Badge>
-                        )}
-                    </div>
-                    <div>
-                        <p className="text-muted-foreground text-[10px] md:text-xs font-semibold uppercase tracking-wider mb-0.5 truncate">{item.title}</p>
-                        <p className="text-lg md:text-2xl font-bold text-foreground tracking-tight truncate">{item.value}</p>
-                        <p className="text-[10px] md:text-xs mt-0.5 md:mt-1 text-muted-foreground line-clamp-1">{item.subtext}</p>
-                    </div>
-                </CardContent>
-            </Card>
-        </Link>
-    );
-}
 
 function StockProgressBar({ item }: { item: { product: string; fullName: string; liter: number; capacity: number; percent: number; gradient: string } }) {
     return (
@@ -204,6 +173,9 @@ export default function DashboardPage() {
     // 4d. Alert Settings (configurable thresholds from Settings page)
     const { settings: alertSettings } = useAlertSettings();
 
+    // 4e. User Profile (for welcome message)
+    const { data: user } = useCurrentUser();
+
     // 5. Current Shift (to determine day/night and get summary)
     const { data: currentShift, isLoading: shiftLoading } = useCurrentShift();
 
@@ -214,16 +186,50 @@ export default function DashboardPage() {
     const activeShiftId = currentShift?.id || latestShift?.id || null;
     const { data: shiftSummary, isLoading: summaryLoading } = useShiftSummary(activeShiftId);
 
-    // 7. Weekly Sales Data (Last 7 days)
-    const today = new Date();
-    const endDate = today.toISOString().split('T')[0];
-    const pastDate = new Date(today);
-    pastDate.setDate(today.getDate() - 6);
-    const startDate = pastDate.toISOString().split('T')[0];
+    // 7. Weekly/Monthly Sales Data
+    // Default to last 7 days
+    const defaultTo = new Date();
+    const defaultFrom = new Date();
+    defaultFrom.setDate(defaultTo.getDate() - 6);
 
-    const { data: weeklySales, isLoading: weeklySalesLoading } = useWeeklySales(startDate, endDate);
+    const [timeRange, setTimeRange] = useState<string>("7 Days");
+    const [dateRange, setDateRange] = useState<{
+        from: Date | undefined;
+        to: Date | undefined;
+    } | undefined>({
+        from: defaultFrom,
+        to: defaultTo,
+    });
+
+    // Handle Time Range Changes
+    useEffect(() => {
+        const to = new Date();
+        const from = new Date();
+
+        if (timeRange === "7 Days") {
+            from.setDate(to.getDate() - 6);
+        } else if (timeRange === "30 Days") {
+            from.setDate(to.getDate() - 29);
+        } else if (timeRange === "Month") {
+            from.setDate(1); // 1st of current month
+        } else if (timeRange === "Custom") {
+            return; // Don't auto-update, let user pick
+        }
+
+        setDateRange({ from, to });
+    }, [timeRange]);
+
+    // Calculate dates for hook
+    const startDate = dateRange?.from ? dateRange.from.toISOString().split('T')[0] : "";
+    const endDate = dateRange?.to ? dateRange.to.toISOString().split('T')[0] : "";
+
+    const { data: weeklySales, isLoading: weeklySalesLoading } = useWeeklySales(
+        startDate && endDate ? startDate : "",
+        startDate && endDate ? endDate : ""
+    );
 
     // 8. Yesterday's Sales Data
+    const today = new Date();
     const yesterdayDate = new Date(today);
     yesterdayDate.setDate(today.getDate() - 1);
     const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
@@ -630,14 +636,19 @@ export default function DashboardPage() {
         );
     }
 
+    // Get time of day for greeting
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
+
     return (
         <div
-            className="flex flex-col gap-4 md:gap-6 p-4 md:p-6 bg-background min-h-screen"
+            className="flex flex-col gap-6 md:gap-8 p-4 md:p-8 bg-background min-h-screen"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
             {/* Pull to Refresh Indicator (Mobile) */}
+
             {pullDistance > 0 && (
                 <div
                     className="fixed top-0 left-0 right-0 flex items-center justify-center z-50 transition-all"
@@ -652,375 +663,332 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-                    <p className="text-sm md:text-base text-muted-foreground">Overview of your station's performance today.</p>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card px-4 py-2 rounded-lg border shadow-sm">
-                    <Clock className="w-4 h-4" />
-                    <span>Last updated: {lastUpdatedText}</span>
-                    <button
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        className="ml-2 p-1 hover:bg-muted rounded transition-colors disabled:opacity-50"
-                        title="Refresh data"
-                    >
-                        <RefreshCcw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </button>
+            {/* Modern Header */}
+            <div className="relative overflow-hidden rounded-3xl bg-mesh-light p-6 md:p-10 border border-slate-100 shadow-soft">
+                <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 mb-2">
+                            {greeting}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-slate-600">{user?.full_name?.split(' ')[0] || 'Manager'}</span>
+                        </h1>
+                        <p className="text-slate-500 font-medium">Here's what's happening at your station today.</p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs md:text-sm font-medium text-slate-400 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-slate-200/50">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Updated {lastUpdatedText}</span>
+                        <button
+                            onClick={handleRefresh}
+                            disabled={isRefreshing}
+                            className="ml-2 hover:text-blue-600 transition-colors disabled:opacity-50"
+                            title="Refresh data"
+                        >
+                            <RefreshCcw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* Top Row: Metric Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            {/* Top Row: Modern Metric Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
                 {dynamicMetrics.map((item, i) => (
-                    <MetricCard key={i} item={item} />
+                    <ModernMetricCard key={i} {...item} index={i} />
                 ))}
             </div>
 
             {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
 
                 {/* Left Column (2/3) */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-6 md:space-y-8">
+
+                    {/* Sales Chart (Area Gradient) */}
+                    <div className="bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-soft">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Sales Trend</h3>
+                                <p className="text-sm text-slate-500 font-medium">Revenue performance over time</p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <Select value={timeRange} onValueChange={setTimeRange}>
+                                        <SelectTrigger className="w-[140px] h-9">
+                                            <SelectValue placeholder="Select Range" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="7 Days">Last 7 Days</SelectItem>
+                                            <SelectItem value="30 Days">Last 30 Days</SelectItem>
+                                            <SelectItem value="Month">This Month</SelectItem>
+                                            <SelectItem value="Custom">Custom Range</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+
+                                    {timeRange === "Custom" && dateRange && (
+                                        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                                            <div className="grid gap-1">
+                                                <Label htmlFor="from-date" className="sr-only">From</Label>
+                                                <Input
+                                                    id="from-date"
+                                                    type="date"
+                                                    className="h-9 w-[130px]"
+                                                    value={dateRange.from ? dateRange.from.toISOString().split('T')[0] : ''}
+                                                    onChange={(e) => {
+                                                        const d = e.target.value ? new Date(e.target.value) : undefined;
+                                                        setDateRange(prev => ({ ...prev, from: d, to: prev?.to }));
+                                                    }}
+                                                />
+                                            </div>
+                                            <span className="text-slate-400">-</span>
+                                            <div className="grid gap-1">
+                                                <Label htmlFor="to-date" className="sr-only">To</Label>
+                                                <Input
+                                                    id="to-date"
+                                                    type="date"
+                                                    className="h-9 w-[130px]"
+                                                    value={dateRange.to ? dateRange.to.toISOString().split('T')[0] : ''}
+                                                    onChange={(e) => {
+                                                        const d = e.target.value ? new Date(e.target.value) : undefined;
+                                                        setDateRange(prev => ({ ...prev, from: prev?.from, to: d }));
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="hidden sm:flex items-center gap-2">
+                                    <span className="flex items-center text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
+                                        <div className="w-2 h-2 rounded-full bg-orange-500 mr-1.5"></div> Day
+                                    </span>
+                                    <span className="flex items-center text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
+                                        <div className="w-2 h-2 rounded-full bg-blue-900 mr-1.5"></div> Night
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="h-[300px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                {weeklySalesLoading ? (
+                                    <div className="flex h-full items-center justify-center">
+                                        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+                                    </div>
+                                ) : (
+                                    <AreaChart data={weeklySales && weeklySales.length > 0 ? weeklySales : []}>
+                                        <defs>
+                                            <linearGradient id="colorDay" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
+                                                <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                                            </linearGradient>
+                                            <linearGradient id="colorNight" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#1e3a8a" stopOpacity={0.2} />
+                                                <stop offset="95%" stopColor="#1e3a8a" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis
+                                            dataKey="date"
+                                            tick={{ fontSize: 11, fill: '#64748b' }}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickFormatter={(val) => {
+                                                const d = new Date(val);
+                                                return d.getDate().toString();
+                                            }}
+                                            dy={10}
+                                        />
+                                        <YAxis
+                                            tick={{ fontSize: 11, fill: '#64748b' }}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`}
+                                            width={35}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{
+                                                borderRadius: '12px',
+                                                border: 'none',
+                                                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                                                padding: '12px'
+                                            }}
+                                            formatter={(value: number) => [`LKR ${Number(value).toLocaleString()}`, '']}
+                                            labelStyle={{ color: '#64748b', marginBottom: '4px', fontSize: '12px' }}
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="dayShift"
+                                            name="Day"
+                                            stroke="#f97316"
+                                            strokeWidth={3}
+                                            fillOpacity={1}
+                                            fill="url(#colorDay)"
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="nightShift"
+                                            name="Night"
+                                            stroke="#1e3a8a"
+                                            strokeWidth={3}
+                                            fillOpacity={1}
+                                            fill="url(#colorNight)"
+                                        />
+                                    </AreaChart>
+                                )}
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
 
                     {/* Current/Last Shift Summary */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    {currentShiftInfo?.type === "Night" ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-orange-500" />}
-                                    {currentShiftInfo?.isOpen ? "Current Shift" : "Last Shift Summary"}
-                                </CardTitle>
-                                {currentShiftInfo ? (
-                                    <Badge variant="outline">
-                                        {currentShiftInfo.type} Shift - {currentShiftInfo.date}
-                                        {currentShiftInfo.isOpen && <span className="ml-2 h-2 w-2 rounded-full bg-green-500 inline-block animate-pulse" />}
-                                    </Badge>
-                                ) : (
-                                    <Badge variant="outline" className="bg-muted text-muted-foreground">No Data</Badge>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-3 md:p-4 pt-0">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-                                <div className="text-center p-2 md:p-3 rounded-lg bg-muted/50">
-                                    <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">Total Sales</p>
-                                    <p className="text-sm md:text-lg font-bold truncate">LKR {(currentShiftInfo?.totalSales ?? 0).toLocaleString()}</p>
-                                </div>
-                                <div className="text-center p-2 md:p-3 rounded-lg bg-muted/50">
-                                    <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">Liters Sold</p>
-                                    <p className="text-sm md:text-lg font-bold">{(currentShiftInfo?.totalLiters ?? 0).toLocaleString()} L</p>
-                                </div>
-                                <div className="text-center p-2 md:p-3 rounded-lg bg-muted/50">
-                                    <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">Sales Count</p>
-                                    <p className="text-sm md:text-lg font-bold text-blue-600">{currentShiftInfo?.salesCount ?? '-'}</p>
-                                </div>
-                                <div className="text-center p-2 md:p-3 rounded-lg bg-emerald-50">
-                                    <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">Status</p>
-                                    <p className={`text-sm md:text-lg font-bold ${currentShiftInfo?.isOpen ? "text-emerald-600" : "text-muted-foreground"}`}>
-                                        {currentShiftInfo?.isOpen ? "In Progress" : "Closed"}
-                                    </p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <div className="bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-soft">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                {currentShiftInfo?.type === "Night" ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-orange-500" />}
+                                {currentShiftInfo?.isOpen ? "Current Shift Live" : "Last Shift Summary"}
+                            </h3>
+                            {currentShiftInfo && (
+                                <span className={`text-xs font-bold px-3 py-1 rounded-full ${currentShiftInfo.isOpen ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>
+                                    {currentShiftInfo.type} - {currentShiftInfo.date}
+                                </span>
+                            )}
+                        </div>
 
-                    {/* Sales Chart */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <TrendingUp className="w-5 h-5 text-muted-foreground" />
-                                    Weekly Sales Trend
-                                </CardTitle>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100/50">
+                                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Total Sales</p>
+                                <p className="text-xl font-bold text-slate-900">LKR {(currentShiftInfo?.totalSales ?? 0).toLocaleString()}</p>
                             </div>
-                            <CardDescription>Day vs Night shift comparison</CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-3 md:p-4 pt-0">
-                            <div className="-mx-3 md:-mx-4 md:mx-0 overflow-x-auto">
-                                <div className="min-w-[400px] md:min-w-0 h-[200px] md:h-[280px] w-full px-3 md:px-0">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        {weeklySalesLoading ? (
-                                            <div className="flex h-full items-center justify-center">
-                                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                            </div>
-                                        ) : (
-                                            <BarChart data={weeklySales && weeklySales.length > 0 ? weeklySales : []}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
-                                                <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                                                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`} width={35} />
-                                                <Tooltip
-                                                    formatter={(value: number) => [`LKR ${Number(value).toLocaleString()}`, '']}
-                                                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', fontSize: 12 }}
-                                                />
-                                                <Legend wrapperStyle={{ fontSize: 10 }} />
-                                                <Bar dataKey="dayShift" name="Day" fill="#ff961e" radius={[4, 4, 0, 0]} />
-                                                <Bar dataKey="nightShift" name="Night" fill="#03045E" radius={[4, 4, 0, 0]} />
-                                            </BarChart>
-                                        )}
-                                    </ResponsiveContainer>
-                                </div>
+                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100/50">
+                                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Volume</p>
+                                <p className="text-xl font-bold text-slate-900">{(currentShiftInfo?.totalLiters ?? 0).toLocaleString()} L</p>
                             </div>
-                        </CardContent>
-                    </Card>
+                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100/50">
+                                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Transactions</p>
+                                <p className="text-xl font-bold text-blue-600">{currentShiftInfo?.salesCount ?? '-'}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-100/50">
+                                <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Status</p>
+                                <p className="text-xl font-bold text-emerald-700">
+                                    {currentShiftInfo?.isOpen ? "In Progress" : "Closed"}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Stock Levels */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Truck className="w-5 h-5 text-muted-foreground" />
-                                    Current Stock Levels
-                                </CardTitle>
-                                <Button variant="ghost" size="sm" asChild>
-                                    <Link href="/inventory">View Details →</Link>
-                                </Button>
+                    <div className="bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-soft">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-2">
+                                <Truck className="w-5 h-5 text-slate-400" />
+                                <h3 className="text-lg font-bold text-slate-900">Current Stock</h3>
                             </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4 p-4 pt-0">
+                            <Link href="/inventory" className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline">
+                                View Details
+                            </Link>
+                        </div>
+                        <div className="space-y-6">
                             {stockData.length > 0 ? (
                                 stockData.map((item, i) => (
                                     <StockProgressBar key={i} item={item} />
                                 ))
                             ) : (
-                                <div className="text-center py-8 text-muted-foreground">
+                                <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                                     <Droplets className="w-8 h-8 mx-auto mb-2 opacity-20" />
                                     <p>No stock data available</p>
                                 </div>
                             )}
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Right Column - Tabs on mobile, stacked on desktop */}
-                <div className="space-y-6">
-                    {/* Mobile: Tab navigation for sidebar sections */}
-                    <div className="lg:hidden">
-                        <Tabs defaultValue="alerts" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="alerts" className="text-xs">
-                                    <Bell className="w-4 h-4 mr-1" />
-                                    Alerts
-                                </TabsTrigger>
-                                <TabsTrigger value="staff" className="text-xs">
-                                    <UserCircle className="w-4 h-4 mr-1" />
-                                    Staff
-                                </TabsTrigger>
-                                <TabsTrigger value="orders" className="text-xs">
-                                    <ClipboardList className="w-4 h-4 mr-1" />
-                                    Orders
-                                </TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="alerts" className="mt-4">
-                                {dynamicAlerts.length > 0 ? (
-                                    <Card className="border-amber-200 bg-amber-50/50">
-                                        <CardHeader className="pb-2">
-                                            <CardTitle className="text-base flex items-center gap-2 text-amber-900">
-                                                <AlertTriangle className="w-5 h-5" />
-                                                Alerts ({dynamicAlerts.length})
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="space-y-3">
-                                            {dynamicAlerts.map((alert) => (
-                                                <div key={alert.id} className="p-3 rounded-lg bg-white border border-amber-100">
-                                                    <p className="text-sm font-medium text-foreground">{alert.title}</p>
-                                                    <p className="text-xs text-muted-foreground mt-1">{alert.message}</p>
-                                                    <Button variant="outline" size="sm" className="mt-2 h-7 text-xs" asChild>
-                                                        <Link href={alert.href}>{alert.action}</Link>
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </CardContent>
-                                    </Card>
-                                ) : (
-                                    <Card>
-                                        <CardContent className="py-8 text-center text-muted-foreground">
-                                            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                                            <p>No active alerts</p>
-                                        </CardContent>
-                                    </Card>
-                                )}
-                            </TabsContent>
-                            <TabsContent value="staff" className="mt-4">
-                                <Card>
-                                    <CardHeader className="pb-2">
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-base">Staff Present</CardTitle>
-                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200">
-                                                {currentShiftInfo?.type === 'Night' ? <Moon className="w-3 h-3 mr-1" /> : <Sun className="w-3 h-3 mr-1" />}
-                                                {currentShiftInfo?.type || 'Day'} Shift
-                                            </Badge>
+                {/* Right Column */}
+                <div className="space-y-6 md:space-y-8">
+
+                    {/* Alerts (Shows only if alerts exist) */}
+                    {dynamicAlerts.length > 0 && (
+                        <div className="bg-amber-50/40 rounded-2xl p-6 border border-amber-100/50 shadow-sm">
+                            <h3 className="text-sm font-bold text-amber-900 uppercase tracking-widest flex items-center gap-2 mb-4">
+                                <AlertTriangle className="w-4 h-4" />
+                                Attention Needed
+                            </h3>
+                            <div className="space-y-3">
+                                {dynamicAlerts.map((alert) => (
+                                    <div key={alert.id} className="p-3 rounded-xl bg-white border border-amber-100 shadow-sm">
+                                        <p className="text-sm font-semibold text-slate-900">{alert.title}</p>
+                                        <p className="text-xs text-slate-500 mt-1 mb-2">{alert.message}</p>
+                                        <Link href={alert.href} className="text-xs font-bold text-amber-600 hover:text-amber-700 uppercase tracking-wide">
+                                            {alert.action} →
+                                        </Link>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Staff Present */}
+                    <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-slate-900">Staff On Duty</h3>
+                            <div className="text-xs font-semibold px-2 py-1 bg-slate-100 text-slate-600 rounded-lg">
+                                {staffOnDuty.length} Active
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {staffOnDuty.length > 0 ? (
+                                staffOnDuty.map((emp) => (
+                                    <div key={emp.id} className="flex items-center gap-4 bg-slate-50/50 p-2 rounded-xl border border-transparent hover:border-slate-100 transition-all">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-sm font-bold text-blue-700 shadow-sm">
+                                            {emp.name.charAt(0)}
                                         </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-3">
-                                            {staffOnDuty.length > 0 ? (
-                                                staffOnDuty.map((emp) => (
-                                                    <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                                                            {emp.name.charAt(0)}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-medium truncate">{emp.name}</p>
-                                                            <p className="text-xs text-muted-foreground">{emp.role}</p>
-                                                        </div>
-                                                        <span className="text-xs text-muted-foreground font-mono">{emp.timeIn}</span>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-center py-4 text-muted-foreground">
-                                                    <p>No active staff</p>
-                                                </div>
-                                            )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-slate-900 truncate">{emp.name}</p>
+                                            <p className="text-xs text-slate-500 font-medium">{emp.role}</p>
                                         </div>
-                                        <Button variant="ghost" size="sm" className="w-full mt-3" asChild>
-                                            <Link href="/staff">Manage Staff →</Link>
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-                            <TabsContent value="orders" className="mt-4">
-                                <Card>
-                                    <CardHeader className="pb-2">
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-base">Recent Orders</CardTitle>
-                                            <Button variant="ghost" size="sm" asChild>
-                                                <Link href="/inventory?tab=orders">View All</Link>
-                                            </Button>
+                                        <div className="text-xs font-mono font-medium text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-100 shadow-sm">
+                                            {emp.timeIn}
                                         </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-3">
-                                            {recentOrdersList.length > 0 ? (
-                                                recentOrdersList.map((order) => (
-                                                    <div key={order.id} className="flex flex-col gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                                                        <div className="flex justify-between items-start">
-                                                            <div>
-                                                                <p className="text-sm font-medium">{order.product}</p>
-                                                                <p className="text-xs text-muted-foreground">{order.liters.toLocaleString()} L • {order.supplier}</p>
-                                                            </div>
-                                                            <OrderStatusBadge status={order.status} />
-                                                        </div>
-                                                        <div className="flex justify-between items-center text-xs text-muted-foreground">
-                                                            <span>{order.id}</span>
-                                                            <span>{order.time}</span>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-center py-4 text-muted-foreground">
-                                                    <p>No recent orders</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-                        </Tabs>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-6 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                    <p>No active staff</p>
+                                </div>
+                            )}
+                        </div>
+                        <Link href="/staff" className="block mt-6 text-center text-sm font-medium text-slate-400 hover:text-slate-600 transition-colors">
+                            Manage Staff Schedule
+                        </Link>
                     </div>
 
-                    {/* Desktop: Original stacked layout */}
-                    <div className="hidden lg:block space-y-6">
+                    {/* Recent Orders */}
+                    <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-soft">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-slate-900">Recent Orders</h3>
+                            <Link href="/inventory?tab=orders" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                                <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                            </Link>
+                        </div>
 
-                        {/* Alerts */}
-                        {dynamicAlerts.length > 0 && (
-                            <Card className="border-amber-200 bg-amber-50/50">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base flex items-center gap-2 text-amber-900">
-                                        <AlertTriangle className="w-5 h-5" />
-                                        Alerts ({dynamicAlerts.length})
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {dynamicAlerts.map((alert) => (
-                                        <div key={alert.id} className="p-3 rounded-lg bg-white border border-amber-100">
-                                            <p className="text-sm font-medium text-foreground">{alert.title}</p>
-                                            <p className="text-xs text-muted-foreground mt-1">{alert.message}</p>
-                                            <Button variant="outline" size="sm" className="mt-2 h-7 text-xs" asChild>
-                                                <Link href={alert.href}>{alert.action}</Link>
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* Staff Present */}
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-base">Staff Present</CardTitle>
-                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200">
-                                        {currentShiftInfo?.type === 'Night' ? <Moon className="w-3 h-3 mr-1" /> : <Sun className="w-3 h-3 mr-1" />}
-                                        {currentShiftInfo?.type || 'Day'} Shift
-                                    </Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="p-4 pt-0">
-                                <div className="space-y-3">
-                                    {staffOnDuty.length > 0 ? (
-                                        staffOnDuty.map((emp) => (
-                                            <div key={emp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                                                    {emp.name.charAt(0)}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium truncate">{emp.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{emp.role}</p>
-                                                </div>
-                                                <span className="text-xs text-muted-foreground font-mono">{emp.timeIn}</span>
+                        <div className="space-y-4">
+                            {recentOrdersList.length > 0 ? (
+                                recentOrdersList.map((order) => (
+                                    <div key={order.id} className="group flex items-start justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-sm font-bold text-slate-900">{order.product}</span>
+                                                <span className="text-xs text-slate-400">• {order.liters.toLocaleString()}L</span>
                                             </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center py-4 text-muted-foreground">
-                                            <p>No active staff</p>
+                                            <p className="text-xs text-slate-500 font-medium">{order.supplier}</p>
                                         </div>
-                                    )}
-                                </div>
-                                <Button variant="ghost" size="sm" className="w-full mt-3" asChild>
-                                    <Link href="/staff">Manage Staff →</Link>
-                                </Button>
-                            </CardContent>
-                        </Card>
-
-                        {/* Recent Orders */}
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-base">Recent Orders</CardTitle>
-                                    <Button variant="ghost" size="sm" asChild>
-                                        <Link href="/inventory?tab=orders">View All</Link>
-                                    </Button>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="p-4 pt-0">
-                                <div className="space-y-3">
-                                    {recentOrdersList.length > 0 ? (
-                                        recentOrdersList.map((order) => (
-                                            <div key={order.id} className="flex flex-col gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <p className="text-sm font-medium">{order.product}</p>
-                                                        <p className="text-xs text-muted-foreground">{order.liters.toLocaleString()} L • {order.supplier}</p>
-                                                    </div>
-                                                    <OrderStatusBadge status={order.status} />
-                                                </div>
-                                                <div className="flex justify-between items-center text-xs text-muted-foreground">
-                                                    <span>{order.id}</span>
-                                                    <span>{order.time}</span>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center py-4 text-muted-foreground">
-                                            <p>No recent orders</p>
+                                        <div className="text-right">
+                                            <OrderStatusBadge status={order.status} />
+                                            <p className="text-[10px] text-slate-400 font-medium mt-1.5">{order.time}</p>
                                         </div>
-                                    )}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-6 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                    <p>No recent orders</p>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

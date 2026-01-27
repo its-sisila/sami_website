@@ -165,9 +165,12 @@ class ScheduledEmployeesResponse(BaseModel):
 class WeeklySalesStat(BaseModel):
     """Weekly sales stats for chart."""
     date: date
-    name: str # Label "Mon" or "Oct 24"
+    day: str # e.g. "Mon"
+    name: str # Label "Oct 24"
     totalSalesAmount: Decimal
     verifiedFunds: Decimal
+    dayShift: Decimal = Decimal(0)
+    nightShift: Decimal = Decimal(0)
 
 
 class DailySalesSummary(BaseModel):
