@@ -23,7 +23,7 @@ export default function CallToAction() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.2 }}
-          className="text-xl text-neutral-300 mb-12 max-w-2xl mx-auto"
+          className="text-xl text-neutral-600 dark:text-neutral-300 mb-12 max-w-2xl mx-auto"
         >
           Request a curated walkthrough and see how SAMI adapts to your
           operational realities.
@@ -46,7 +46,7 @@ export default function CallToAction() {
 
           <a
             href={SITE_CONFIG.loginPath}
-            className="text-neutral-400 font-medium hover:text-brand-500 transition-colors"
+            className="text-neutral-600 dark:text-neutral-400 font-medium hover:text-brand-600 dark:hover:text-brand-500 transition-colors"
           >
             Already a Client? Login
           </a>
