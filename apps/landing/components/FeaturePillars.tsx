@@ -74,7 +74,7 @@ export default function FeaturePillars() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.2 }}
-          className="text-lg text-neutral-400"
+          className="text-lg text-neutral-600 dark:text-neutral-400"
         >
           Each feature pillar compounds value. First operational clarity, then
           predictive intelligence, and finally strategic foresight.
@@ -93,20 +93,20 @@ export default function FeaturePillars() {
             key={f.title}
             variants={item}
             whileHover={{ y: -5 }}
-            className="group relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/50 backdrop-blur-sm p-8 hover:border-brand-600/50 transition-all duration-300"
+            className="group relative overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm p-8 hover:border-brand-600/50 transition-all duration-300"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-brand-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
             <div className="relative z-10">
-              <div className="w-12 h-12 rounded-lg bg-brand-900/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-brand-500/20">
-                <f.icon className="h-6 w-6 text-brand-500" />
+              <div className="w-12 h-12 rounded-lg bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-brand-500/20">
+                <f.icon className="h-6 w-6 text-brand-600 dark:text-brand-500" />
               </div>
 
-              <h3 className="font-bold text-xl mb-3 text-neutral-100 group-hover:text-brand-400 transition-colors">
+              <h3 className="font-bold text-xl mb-3 text-neutral-900 dark:text-neutral-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
                 {f.title}
               </h3>
 
-              <p className="text-neutral-400 leading-relaxed">
+              <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
                 {f.text}
               </p>
             </div>
