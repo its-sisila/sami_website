@@ -2,6 +2,7 @@ import "./global.css";
 import { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { SITE_CONFIG } from "@/lib/site.config";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -50,20 +51,15 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script
-          id="theme-init"
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{const t=localStorage.getItem('theme');if(t){document.documentElement.dataset.theme=t;if(t==='dark')document.documentElement.classList.add('dark');}}catch(e){}})();`,
-          }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      </head>
-      <body className={`${inter.variable} font-sans bg-black relative`}>
-        {children}
+      <body className={`${inter.variable} font-sans bg-white dark:bg-black text-neutral-900 dark:text-neutral-100 relative`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
