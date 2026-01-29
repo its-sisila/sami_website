@@ -1,0 +1,59 @@
+"""
+Async SQLAlchemy database setup for Supabase Postgres.
+Uses SQLAlchemy 2.0+ async engine and session.
+"""
+
+from collections.abc import AsyncGenerator
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import DeclarativeBase
+
+from app.core.config import settings
+
+
+# Create async engine
+engine = create_async_engine(
+    settings.async_database_url,
+    echo=settings.debug,
+    future=True,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=0,  # Prevent opening too many new connections
+    pool_timeout=30, # Wait for a connection instead of failing immediately
+)
+
+# Session factory
+async_session_factory = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+
+
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models."""
+    pass
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Dependency that yields an async database session.
+    Usage in routes:
+        @router.get("/items")
+        async def get_items(db: AsyncSession = Depends(get_db)):
+            ...
+    """
+    async with async_session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()

@@ -4,7 +4,8 @@ export const SITE_CONFIG = {
   domain: "getsami.app",
   baseUrl: "https://www.getsami.app",
   contactEmail: "contact@getsami.app",
-  loginPath: "/login",
+  // Production: "https://dashboard.getsami.app/login"
+  loginPath: "https://dashboard.getsami.app/login",
   demoMailTo: "mailto:contact@getsami.app?subject=Request%20a%20SAMI%20Demo",
   social: {
     linkedin: "https://www.linkedin.com/company/sami-ai-company/",
