@@ -152,7 +152,7 @@ export default function LoginPage() {
 
                 {/* Version */}
                 <p className="mt-8 text-center text-xs text-slate-400">
-                    Version 1.5 • © 2025 SAMI
+                    Version 1.5 • © {new Date().getFullYear()} SAMI. All rights reserved.
                 </p>
             </div>
         </div>
