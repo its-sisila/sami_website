@@ -32,7 +32,7 @@ export default function Header() {
   return (
     <header
       className={`fixed top-0 z-50 w-full transition-all duration-300 ${scrolled
-        ? "bg-black/80 backdrop-blur-md border-b border-neutral-800/50 shadow-sm"
+        ? "bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800/50 shadow-sm"
         : "bg-transparent"
         }`}
     >
@@ -51,7 +51,7 @@ export default function Header() {
             <a
               key={item.href}
               href={item.href}
-              className="text-sm font-medium text-neutral-300 hover:text-brand-500 transition-colors relative group"
+              className="text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:text-brand-600 dark:hover:text-brand-500 transition-colors relative group"
             >
               {item.label}
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-600 transition-all group-hover:w-full" />
@@ -69,21 +69,24 @@ export default function Header() {
           </a>
           <button
             data-demo-trigger
-            className="text-sm font-medium text-neutral-300 hover:text-brand-500 transition-colors"
+            className="text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:text-brand-600 dark:hover:text-brand-500 transition-colors"
           >
             Request Demo
           </button>
         </div>
 
-        {/* Mobile Menu Toggle */}
-        <button
-          className="lg:hidden relative z-50 p-2 text-neutral-300"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          aria-label="Toggle navigation"
-        >
-          {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        {/* Mobile Actions */}
+        <div className="flex items-center gap-2 lg:hidden relative z-50">
+          <ThemeToggle />
+          <button
+            className="p-2 text-neutral-600 dark:text-neutral-300"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-label="Toggle navigation"
+          >
+            {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Nav */}
@@ -93,7 +96,7 @@ export default function Header() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-40 bg-neutral-950/95 backdrop-blur-xl pt-24 px-6 pb-6 lg:hidden border-b border-neutral-800"
+            className="fixed inset-0 z-40 bg-white dark:bg-neutral-950/95 backdrop-blur-xl pt-24 px-6 pb-6 lg:hidden border-b border-neutral-200 dark:border-neutral-800"
           >
             <nav className="flex flex-col gap-6 h-full">
               {navItems.map((n, i) => (
@@ -104,18 +107,16 @@ export default function Header() {
                   key={n.href}
                   href={n.href}
                   onClick={() => setOpen(false)}
-                  className="text-3xl font-bold text-neutral-200 hover:text-brand-500 tracking-tight"
+                  className="text-3xl font-bold text-neutral-900 dark:text-neutral-200 hover:text-brand-600 dark:hover:text-brand-500 tracking-tight"
                 >
                   {n.label}
                 </motion.a>
               ))}
               <div className="mt-auto space-y-4">
-                <div className="flex justify-center pb-4">
-                  <ThemeToggle />
-                </div>
+
                 <a
                   href={SITE_CONFIG.loginPath}
-                  className="flex items-center justify-center w-full py-3 rounded-xl border border-neutral-800 text-neutral-300 font-medium hover:border-brand-600 hover:text-brand-500 transition-colors"
+                  className="flex items-center justify-center w-full py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 font-medium hover:border-brand-600 hover:text-brand-600 dark:hover:text-brand-500 transition-colors"
                   onClick={() => setOpen(false)}
                 >
                   Login
