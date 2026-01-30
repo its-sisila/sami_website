@@ -5,6 +5,7 @@ import { SITE_CONFIG } from "@/lib/site.config";
 import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ThemeToggle } from "./theme-toggle";
 
 const navItems = [
   { href: "#features", label: "Features" },
@@ -59,6 +60,7 @@ export default function Header() {
         </nav>
 
         <div className="hidden lg:flex items-center gap-4">
+          <ThemeToggle />
           <a
             href={SITE_CONFIG.loginPath}
             className="text-sm font-medium rounded-full bg-brand-700 text-white px-6 py-2.5 hover:bg-brand-500 shadow-lg shadow-brand-600/20 hover:shadow-brand-600/40 transition-all hover:-translate-y-0.5"
@@ -108,6 +110,9 @@ export default function Header() {
                 </motion.a>
               ))}
               <div className="mt-auto space-y-4">
+                <div className="flex justify-center pb-4">
+                  <ThemeToggle />
+                </div>
                 <a
                   href={SITE_CONFIG.loginPath}
                   className="flex items-center justify-center w-full py-3 rounded-xl border border-neutral-800 text-neutral-300 font-medium hover:border-brand-600 hover:text-brand-500 transition-colors"
