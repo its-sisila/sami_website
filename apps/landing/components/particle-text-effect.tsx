@@ -92,7 +92,7 @@ class Particle {
     }
   }
 
-  kill(width: number, height: number) {
+  kill(width: number, height: number, fadeColor: { r: number; g: number; b: number }) {
     if (!this.isKilled) {
       // Generate random angle from 0 to 2π (full circle)
       const angle = Math.random() * Math.PI * 2
@@ -107,13 +107,13 @@ class Particle {
       this.target.x = exitX
       this.target.y = exitY
 
-      // Begin blending color to black
+      // Begin blending color to target fade color
       this.startColor = {
         r: this.startColor.r + (this.targetColor.r - this.startColor.r) * this.colorWeight,
         g: this.startColor.g + (this.targetColor.g - this.startColor.g) * this.colorWeight,
         b: this.startColor.b + (this.targetColor.b - this.startColor.b) * this.colorWeight,
       }
-      this.targetColor = { r: 0, g: 0, b: 0 }
+      this.targetColor = fadeColor
       this.colorWeight = 0
 
       this.isKilled = true
@@ -125,13 +125,17 @@ class Particle {
 interface ParticleTextEffectProps {
   words?: string[]
   backgroundColor?: string
+  particleColor?: { r: number; g: number; b: number }
+  fadeColor?: { r: number; g: number; b: number }
 }
 
 const DEFAULT_WORDS = ["Protect", "Predict", "Profit", "SAMI"]
 
 export function ParticleTextEffect({
   words = DEFAULT_WORDS,
-  backgroundColor = "black"
+  backgroundColor = "black",
+  particleColor = { r: 255, g: 255, b: 255 },
+  fadeColor = { r: 0, g: 0, b: 0 }
 }: ParticleTextEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationRef = useRef<number>()
@@ -179,13 +183,6 @@ export function ParticleTextEffect({
 
     const imageData = offscreenCtx.getImageData(0, 0, canvas.width, canvas.height)
     const pixels = imageData.data
-
-    // Generate new color
-    const newColor = {
-      r: 255, // White particles
-      g: 255,
-      b: 255,
-    }
 
     const particles = particlesRef.current
     let particleIndex = 0
@@ -243,7 +240,7 @@ export function ParticleTextEffect({
           g: particle.startColor.g + (particle.targetColor.g - particle.startColor.g) * particle.colorWeight,
           b: particle.startColor.b + (particle.targetColor.b - particle.startColor.b) * particle.colorWeight,
         }
-        particle.targetColor = newColor
+        particle.targetColor = particleColor
         particle.colorWeight = 0
 
         particle.target.x = x
@@ -253,7 +250,7 @@ export function ParticleTextEffect({
 
     // Kill remaining particles
     for (let i = particleIndex; i < particles.length; i++) {
-      particles[i]!.kill(canvas.width, canvas.height)
+      particles[i]!.kill(canvas.width, canvas.height, fadeColor)
     }
   }
 
@@ -330,7 +327,7 @@ export function ParticleTextEffect({
           Math.pow(particle.pos.x - mouseRef.current.x, 2) + Math.pow(particle.pos.y - mouseRef.current.y, 2),
         )
         if (distance < 50) {
-          particle.kill(canvas.width, canvas.height)
+          particle.kill(canvas.width, canvas.height, fadeColor)
         }
       })
     }

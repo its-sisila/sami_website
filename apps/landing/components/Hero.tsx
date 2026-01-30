@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "./ui/button"
 import { ArrowRight } from "lucide-react"
 import { ParticleTextEffect } from "./particle-text-effect"
@@ -5,15 +7,34 @@ import { InfiniteSlider } from "./ui/infinite-slider"
 import { ProgressiveBlur } from "./ui/progressive-blur"
 import { SITE_CONFIG } from "@/lib/site.config";
 import Link from "next/link";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
 export default function Hero() {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const particleColor = mounted && resolvedTheme === "light"
+    ? { r: 0, g: 0, b: 0 } // Black
+    : { r: 255, g: 255, b: 255 };
+
+  const fadeColor = mounted && resolvedTheme === "light"
+    ? { r: 255, g: 255, b: 255 } // White
+    : { r: 0, g: 0, b: 0 }; // Black
   return (
     <section className="relative min-h-screen flex flex-col justify-between overflow-hidden pt-20 pb-4 md:py-20 px-4">
       {/* Full Screen Particle Effect */}
       <div className="absolute inset-0 z-0">
         <ParticleTextEffect
+          key={mounted ? resolvedTheme : "initial"}
           words={["SAMI", "Predict", "Protect", "Profit"]}
           backgroundColor="transparent"
+          particleColor={particleColor}
+          fadeColor={fadeColor}
         />
       </div>
 
@@ -24,7 +45,7 @@ export default function Hero() {
       <div className="container mx-auto text-center relative z-10 pb-8 pointer-events-none">
         {/* Pointer events auto for interactive children */}
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 text-balance">
+          <h2 className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-white mb-6 text-balance">
             Shed AI Manager Interface - <span className="text-red-500">Predict. Protect. Profit.</span>
           </h2>
 
@@ -49,7 +70,7 @@ export default function Hero() {
             <div className="group relative m-auto max-w-6xl">
               <div className="flex flex-col items-center md:flex-row">
                 <div className="md:max-w-44 md:border-r md:border-gray-600 md:pr-6 mb-4 md:mb-0">
-                  <p className="text-end text-sm text-gray-400">Powering All Sheds</p>
+                  <p className="text-end text-md text-neutral-900 dark:text-gray-400">Powering All Sheds</p>
                 </div>
                 <div className="relative py-6 md:w-[calc(100%-11rem)]">
                   {/* Mobile View: Static Row */}

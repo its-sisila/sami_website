@@ -51,7 +51,7 @@ export default function FAQ() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.2 }}
-          className="text-lg text-neutral-400"
+          className="text-lg text-neutral-600 dark:text-neutral-400"
         >
           Still have questions? Reach out and we can walk through your
           operational context together.
@@ -76,17 +76,17 @@ function FAQItem({ faq, index }: { faq: { q: string; a: string }; index: number 
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.1 }}
-      className="rounded-2xl border border-neutral-800 bg-neutral-900/50 backdrop-blur-sm overflow-hidden hover:border-brand-600/30 transition-colors"
+      className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm overflow-hidden hover:border-brand-600/30 transition-colors"
     >
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-6 text-left hover:bg-neutral-800/50 transition-colors"
+        className="w-full flex items-center justify-between p-6 text-left hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50 transition-colors"
       >
-        <span className="font-semibold text-lg text-neutral-100">
+        <span className="font-semibold text-lg text-neutral-900 dark:text-neutral-100">
           {faq.q}
         </span>
         <Plus
-          className={`w-5 h-5 text-brand-500 transition-transform duration-300 ${isOpen ? "rotate-45" : ""
+          className={`w-5 h-5 text-brand-600 dark:text-brand-500 transition-transform duration-300 ${isOpen ? "rotate-45" : ""
             }`}
         />
       </button>
@@ -95,7 +95,7 @@ function FAQItem({ faq, index }: { faq: { q: string; a: string }; index: number 
           }`}
       >
         <div className="overflow-hidden">
-          <div className="p-6 pt-0 text-neutral-400 leading-relaxed">
+          <div className="p-6 pt-0 text-neutral-600 dark:text-neutral-400 leading-relaxed">
             {faq.a}
           </div>
         </div>
