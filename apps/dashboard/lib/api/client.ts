@@ -185,23 +185,32 @@ export const inventory = {
     /**
      * Get all fuel products for the station
      */
-    getProducts: () => request<FuelProduct[]>('/inventory/products'),
+    getProducts: (stationId?: string) => {
+        const url = stationId ? `/inventory/products?station_id=${stationId}` : '/inventory/products';
+        return request<FuelProduct[]>(url);
+    },
 
     /**
      * Create a new fuel product
      */
-    createProduct: (data: { code: string; name: string; price_per_liter: number }) =>
-        request<FuelProduct>('/inventory/products', {
+    createProduct: (data: { code: string; name: string; price_per_liter: number }, stationId?: string) => {
+        const url = stationId ? `/inventory/products?station_id=${stationId}` : '/inventory/products';
+        return request<FuelProduct>(url, {
             method: 'POST',
             body: JSON.stringify(data),
-        }),
+        });
+    },
 
     /**
      * Get all tanks with current levels (or levels for a specific date)
      */
-    getTanks: (forDate?: string) => request<TankWithLevel[]>(
-        forDate ? `/inventory/tanks?for_date=${forDate}` : '/inventory/tanks'
-    ),
+    getTanks: (forDate?: string, stationId?: string) => {
+        const params = new URLSearchParams();
+        if (forDate) params.set('for_date', forDate);
+        if (stationId) params.set('station_id', stationId);
+        const query = params.toString() ? `?${params}` : '';
+        return request<TankWithLevel[]>(`/inventory/tanks${query}`);
+    },
 
     /**
      * Submit daily dip readings
@@ -237,11 +246,13 @@ export const inventory = {
     /**
      * Create a new tank
      */
-    createTank: (data: TankCreate) =>
-        request<Tank>('/inventory/tanks', {
+    createTank: (data: TankCreate, stationId?: string) => {
+        const url = stationId ? `/inventory/tanks?station_id=${stationId}` : '/inventory/tanks';
+        return request<Tank>(url, {
             method: 'POST',
             body: JSON.stringify(data),
-        }),
+        });
+    },
 
     /**
      * Get tank readings history
@@ -252,7 +263,10 @@ export const inventory = {
     /**
      * Get all nozzles for the station with pump and product info
      */
-    getNozzles: () => request<Nozzle[]>('/inventory/nozzles'),
+    getNozzles: (stationId?: string) => {
+        const url = stationId ? `/inventory/nozzles?station_id=${stationId}` : '/inventory/nozzles';
+        return request<Nozzle[]>(url);
+    },
 
     /**
      * Create a new nozzle
@@ -265,61 +279,105 @@ export const inventory = {
         pump_id?: string;
         digital_meter?: string;
         analog_meter?: string;
-    }) =>
-        request<Nozzle>('/inventory/nozzles', {
+    }, stationId?: string) => {
+        const url = stationId ? `/inventory/nozzles?station_id=${stationId}` : '/inventory/nozzles';
+        return request<Nozzle>(url, {
             method: 'POST',
             body: JSON.stringify(data),
-        }),
+        });
+    },
 
     /**
      * Update a product
      */
-    updateProduct: (productId: string, data: { code: string; name: string; price_per_liter: number }) =>
-        request<FuelProduct>(`/inventory/products/${productId}`, {
+    updateProduct: (productId: string, data: { code: string; name: string; price_per_liter: number }, stationId?: string) => {
+        const url = stationId ? `/inventory/products/${productId}?station_id=${stationId}` : `/inventory/products/${productId}`;
+        return request<FuelProduct>(url, {
             method: 'PUT',
             body: JSON.stringify(data),
-        }),
+        });
+    },
 
     /**
      * Update a tank
      */
-    updateTank: (tankId: string, data: { name: string; product_id: string; tank_type?: string; capacity_liters: number; color?: string }) =>
-        request<Tank>(`/inventory/tanks/${tankId}`, {
+    updateTank: (tankId: string, data: { name: string; product_id: string; tank_type?: string; capacity_liters: number; color?: string }, stationId?: string) => {
+        const url = stationId ? `/inventory/tanks/${tankId}?station_id=${stationId}` : `/inventory/tanks/${tankId}`;
+        return request<Tank>(url, {
             method: 'PUT',
             body: JSON.stringify(data),
-        }),
+        });
+    },
 
     /**
      * Update a nozzle
      */
-    updateNozzle: (nozzleId: string, data: { nozzle_id: string; nozzle_name: string; tank_id: string; product_id: string; pump_id?: string }) =>
-        request<Nozzle>(`/inventory/nozzles/${nozzleId}`, {
+    updateNozzle: (nozzleId: string, data: { nozzle_id: string; nozzle_name: string; tank_id: string; product_id: string; pump_id?: string }, stationId?: string) => {
+        const url = stationId ? `/inventory/nozzles/${nozzleId}?station_id=${stationId}` : `/inventory/nozzles/${nozzleId}`;
+        return request<Nozzle>(url, {
             method: 'PUT',
             body: JSON.stringify(data),
-        }),
+        });
+    },
+
+    getPumps: (stationId?: string) => {
+        const url = stationId ? `/inventory/pumps?station_id=${stationId}` : '/inventory/pumps';
+        return request<{ id: string; station_id: string; name: string; location?: string; is_active: boolean }[]>(url);
+    },
 
     /**
-     * Get all pumps for the station
+     * Create a new pump
      */
-    getPumps: () => request<{ id: string; station_id: string; name: string; location?: string; is_active: boolean }[]>('/inventory/pumps'),
+    createPump: (data: { name: string; location?: string }, stationId?: string) => {
+        const url = stationId ? `/inventory/pumps?station_id=${stationId}` : '/inventory/pumps';
+        return request<{ id: string; station_id: string; name: string; location?: string; is_active: boolean }>(url, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    /**
+     * Update a pump
+     */
+    updatePump: (pumpId: string, data: { name: string; location?: string }, stationId?: string) => {
+        const url = stationId ? `/inventory/pumps/${pumpId}?station_id=${stationId}` : `/inventory/pumps/${pumpId}`;
+        return request<{ id: string; station_id: string; name: string; location?: string; is_active: boolean }>(url, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    /**
+     * Delete a pump
+     */
+    deletePump: (pumpId: string, stationId?: string) => {
+        const url = stationId ? `/inventory/pumps/${pumpId}?station_id=${stationId}` : `/inventory/pumps/${pumpId}`;
+        return request<void>(url, { method: 'DELETE' });
+    },
 
     /**
      * Delete a product
      */
-    deleteProduct: (productId: string) =>
-        request<void>(`/inventory/products/${productId}`, { method: 'DELETE' }),
+    deleteProduct: (productId: string, stationId?: string) => {
+        const url = stationId ? `/inventory/products/${productId}?station_id=${stationId}` : `/inventory/products/${productId}`;
+        return request<void>(url, { method: 'DELETE' });
+    },
 
     /**
      * Delete a tank
      */
-    deleteTank: (tankId: string) =>
-        request<void>(`/inventory/tanks/${tankId}`, { method: 'DELETE' }),
+    deleteTank: (tankId: string, stationId?: string) => {
+        const url = stationId ? `/inventory/tanks/${tankId}?station_id=${stationId}` : `/inventory/tanks/${tankId}`;
+        return request<void>(url, { method: 'DELETE' });
+    },
 
     /**
      * Delete a nozzle
      */
-    deleteNozzle: (nozzleId: string) =>
-        request<void>(`/inventory/nozzles/${nozzleId}`, { method: 'DELETE' }),
+    deleteNozzle: (nozzleId: string, stationId?: string) => {
+        const url = stationId ? `/inventory/nozzles/${nozzleId}?station_id=${stationId}` : `/inventory/nozzles/${nozzleId}`;
+        return request<void>(url, { method: 'DELETE' });
+    },
 
     /**
      * Get last meter readings for all nozzles (to auto-populate start meter)
