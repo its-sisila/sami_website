@@ -14,9 +14,9 @@ const stages = [
   {
     number: "Stage 2",
     title: "Predictive Operations",
-    status: "Current",
+    status: "Completed",
     desc: "Hybrid demand forecasting, proactive reorder, refined anomaly detection & automation.",
-    icon: Clock,
+    icon: CheckCircle2,
   },
   {
     number: "Stage 3",
@@ -34,7 +34,7 @@ export default function Timeline() {
       <div>
         <div className="flex items-center gap-3 mb-4">
           <stage.icon className={`w-8 h-8 ${stage.status === "Current" ? "text-brand-500" :
-            stage.status === "Next" ? "text-amber-500" : "text-neutral-500"
+            stage.status === "Next" ? "text-amber-500" : "text-green-500"
             }`} />
           <h3 className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100">
             {stage.title}
@@ -47,7 +47,7 @@ export default function Timeline() {
               ? "border-brand-500/30 bg-brand-500/10 text-brand-400"
               : stage.status === "Next"
                 ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                : "border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                : "border-green-500/30 bg-green-500/10 text-green-400"
               }`}
           >
             {stage.status}
