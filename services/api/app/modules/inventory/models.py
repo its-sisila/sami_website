@@ -77,11 +77,12 @@ class Nozzle(Base):
     
     __tablename__ = "nozzles"
     
-    nozzle_id: Mapped[str] = mapped_column("nozzle_id", String(50), primary_key=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    nozzle_code: Mapped[str | None] = mapped_column(String(50))  # Human-readable ID (e.g., N-LAD-1)
+    nozzle_name: Mapped[str | None] = mapped_column(String(100))  # Display name
     pump_id: Mapped[UUID] = mapped_column(ForeignKey("pumps.id", ondelete="CASCADE"))
     tank_id: Mapped[UUID] = mapped_column(ForeignKey("tanks.id", ondelete="RESTRICT"))
     product_id: Mapped[UUID] = mapped_column(ForeignKey("fuel_products.id", ondelete="RESTRICT"))
-    nozzle_name: Mapped[str | None] = mapped_column("nozzle_name", String(100))  # Display name (e.g., LAD-1)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)

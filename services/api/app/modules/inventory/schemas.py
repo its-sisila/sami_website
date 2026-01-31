@@ -78,7 +78,7 @@ class TankWithLevel(TankRead):
 
 class NozzleReadingEntry(BaseModel):
     """Schema for a single nozzle meter reading."""
-    nozzle_id: str
+    nozzle_id: UUID
     end_meter: Decimal
 
 
@@ -154,6 +154,12 @@ class FuelDeliveryRead(BaseModel):
 # Pump and Nozzle Schemas
 # ============================================================================
 
+class PumpCreate(BaseModel):
+    """Schema for creating a new pump."""
+    name: str
+    location: str | None = None
+
+
 class PumpRead(BaseModel):
     """Pump response schema."""
     id: UUID
@@ -167,22 +173,23 @@ class PumpRead(BaseModel):
 
 class NozzleCreate(BaseModel):
     """Schema for creating a new nozzle."""
-    nozzle_id: str  # User input text ID (e.g., N-LAD-1) - REQUIRED
+    nozzle_code: str  # User input text ID (e.g., N-LAD-1) - REQUIRED
     nozzle_name: str  # Display name (e.g., LAD-1)
     tank_id: UUID
     product_id: UUID
-    pump_id: str | None = None  # e.g., P-LAD-1 (text, optional)
+    pump_id: UUID  # Pump UUID
     digital_meter: Decimal = Decimal("0")
     analog_meter: Decimal = Decimal("0")
 
 
 class NozzleRead(BaseModel):
     """Nozzle response schema with related data."""
-    nozzle_id: str  # Human-readable ID (e.g., N-LAD-1)
+    id: UUID  # Primary key
+    nozzle_code: str | None = None  # Human-readable ID (e.g., N-LAD-1)
+    nozzle_name: str | None = None
     pump_id: UUID
     tank_id: UUID
     product_id: UUID
-    nozzle_name: str | None = None
     is_active: bool
     # Joined fields for UI convenience
     pump_name: str | None = None
