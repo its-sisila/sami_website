@@ -291,7 +291,7 @@ async def get_sales_history(
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     start_date: DateType | None = Query(None, description="Filter by start date"),
     end_date: DateType | None = Query(None, description="Filter by end date"),
-    nozzle_id: str | None = Query(None, description="Filter by nozzle ID"),
+    nozzle_id: UUID | None = Query(None, description="Filter by nozzle ID"),
     product_code: str | None = Query(None, description="Filter by product code"),
 ):
     """

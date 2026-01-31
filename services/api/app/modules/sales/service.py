@@ -711,7 +711,7 @@ async def get_sales_history(
     offset: int,
     start_date: date | None,
     end_date: date | None,
-    nozzle_id: str | None,
+    nozzle_id: UUID | None,
     product_code: str | None,
     db: AsyncSession
 ) -> dict:
@@ -742,7 +742,7 @@ async def get_sales_history(
         )
         .select_from(Sale)
         .join(Shift, Sale.shift_id == Shift.id)
-        .outerjoin(Nozzle, Sale.nozzle_id == Nozzle.nozzle_id)
+        .outerjoin(Nozzle, Sale.nozzle_id == Nozzle.id)
         .outerjoin(FuelProduct, Nozzle.product_id == FuelProduct.id)
         .outerjoin(Employee, Sale.employee_id == Employee.id)
         .where(Shift.station_id == station_id)
