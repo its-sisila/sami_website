@@ -20,7 +20,7 @@ from app.modules.inventory.schemas import (
     TankReadingCreate, TankReadingRead,
     FuelDeliveryCreate,
     NozzleCreate, NozzleRead,
-    PumpRead,
+    PumpRead, PumpCreate,
 )
 
 
@@ -467,14 +467,13 @@ async def list_nozzles(station_id: UUID, db: AsyncSession) -> list[NozzleRead]:
     nozzles = []
     for row in rows:
         nozzle = row[0]
-        # Convert UUID to string if needed (for backward compatibility with existing data)
-        nozzle_id_str = str(nozzle.nozzle_id) if hasattr(nozzle.nozzle_id, 'hex') else nozzle.nozzle_id
         nozzles.append(NozzleRead(
-            nozzle_id=nozzle_id_str,
+            id=nozzle.id,
+            nozzle_code=nozzle.nozzle_code,
+            nozzle_name=nozzle.nozzle_name,
             pump_id=nozzle.pump_id,
             tank_id=nozzle.tank_id,
             product_id=nozzle.product_id,
-            nozzle_name=nozzle.nozzle_name,
             is_active=nozzle.is_active,
             pump_name=row[1],  # pump_name
             product_name=row[2],  # product_name
@@ -511,51 +510,21 @@ async def create_nozzle(
     if not tank:
         raise ValueError("Tank not found or does not belong to this station")
     
-    # Find or create pump based on pump_id text (if provided)
-    pump_uuid: UUID | None = None
-    if data.pump_id:
-        # Try to find pump by name
-        pump_stmt = select(Pump).where(Pump.name == data.pump_id, Pump.station_id == station_id)
-        pump_result = await db.execute(pump_stmt)
-        pump = pump_result.scalar_one_or_none()
-        if pump:
-            pump_uuid = pump.id
-        else:
-            # Create a new pump with this name
-            new_pump = Pump(
-                id=uuid4(),
-                station_id=station_id,
-                name=data.pump_id,
-                is_active=True,
-            )
-            db.add(new_pump)
-            await db.flush()
-            pump_uuid = new_pump.id
-    else:
-        # Get or create a default "Unassigned" pump
-        default_pump_stmt = select(Pump).where(Pump.name == "Unassigned", Pump.station_id == station_id)
-        default_pump_result = await db.execute(default_pump_stmt)
-        default_pump = default_pump_result.scalar_one_or_none()
-        if default_pump:
-            pump_uuid = default_pump.id
-        else:
-            new_pump = Pump(
-                id=uuid4(),
-                station_id=station_id,
-                name="Unassigned",
-                is_active=True,
-            )
-            db.add(new_pump)
-            await db.flush()
-            pump_uuid = new_pump.id
+    # Verify pump belongs to station
+    pump_stmt = select(Pump).where(Pump.id == data.pump_id, Pump.station_id == station_id)
+    pump_result = await db.execute(pump_stmt)
+    pump = pump_result.scalar_one_or_none()
+    if not pump:
+        raise ValueError("Pump not found or does not belong to this station")
     
-    # Create nozzle with user-provided nozzle_id
+    # Create nozzle with auto-generated UUID
     nozzle = Nozzle(
-        nozzle_id=data.nozzle_id,  # User-provided ID (e.g., N-LAD-1)
-        pump_id=pump_uuid,
+        id=uuid4(),
+        nozzle_code=data.nozzle_code,  # User-provided code (e.g., N-LAD-1)
+        nozzle_name=data.nozzle_name,
+        pump_id=data.pump_id,
         tank_id=data.tank_id,
         product_id=data.product_id,
-        nozzle_name=data.nozzle_name,
         is_active=True,
     )
     db.add(nozzle)
@@ -570,19 +539,18 @@ async def create_nozzle(
                FuelProduct.code.label("product_code"), FuelProduct.price_per_liter)
         .join(Pump, Nozzle.pump_id == Pump.id)
         .join(FuelProduct, Nozzle.product_id == FuelProduct.id)
-        .where(Nozzle.nozzle_id == nozzle.nozzle_id)
+        .where(Nozzle.id == nozzle.id)
     )
     result = await db.execute(stmt)
     row = result.one()
     
-    # Convert UUID to string if needed
-    nozzle_id_str = str(nozzle.nozzle_id) if hasattr(nozzle.nozzle_id, 'hex') else nozzle.nozzle_id
     return NozzleRead(
-        nozzle_id=nozzle_id_str,
+        id=nozzle.id,
+        nozzle_code=nozzle.nozzle_code,
+        nozzle_name=nozzle.nozzle_name,
         pump_id=nozzle.pump_id,
         tank_id=nozzle.tank_id,
         product_id=nozzle.product_id,
-        nozzle_name=nozzle.nozzle_name,
         is_active=nozzle.is_active,
         pump_name=row[1],
         product_name=row[2],
@@ -593,16 +561,15 @@ async def create_nozzle(
 
 async def update_nozzle(
     station_id: UUID,
-    nozzle_id: str,
+    nozzle_id: UUID,
     data: NozzleCreate,
     db: AsyncSession
 ) -> NozzleRead:
     """Update a nozzle."""
-    # nozzle_id is now VARCHAR in database, use directly as string
     stmt = (
         select(Nozzle)
         .join(Pump, Nozzle.pump_id == Pump.id)
-        .where(Nozzle.nozzle_id == nozzle_id, Pump.station_id == station_id)
+        .where(Nozzle.id == nozzle_id, Pump.station_id == station_id)
     )
     result = await db.execute(stmt)
     nozzle = result.scalar_one_or_none()
@@ -616,50 +583,19 @@ async def update_nozzle(
     if not tank:
         raise ValueError("Tank not found or does not belong to this station")
     
+    # Verify pump belongs to station
+    pump_stmt = select(Pump).where(Pump.id == data.pump_id, Pump.station_id == station_id)
+    pump_result = await db.execute(pump_stmt)
+    pump = pump_result.scalar_one_or_none()
+    if not pump:
+        raise ValueError("Pump not found or does not belong to this station")
+    
     # Update nozzle fields
+    nozzle.nozzle_code = data.nozzle_code
     nozzle.nozzle_name = data.nozzle_name
+    nozzle.pump_id = data.pump_id
     nozzle.tank_id = data.tank_id
     nozzle.product_id = data.product_id
-    
-    # Handle Pump update logic
-    pump_uuid: UUID | None = None
-    if data.pump_id:
-        # Try to find pump by name
-        pump_stmt = select(Pump).where(Pump.name == data.pump_id, Pump.station_id == station_id)
-        pump_result = await db.execute(pump_stmt)
-        pump = pump_result.scalar_one_or_none()
-        if pump:
-            pump_uuid = pump.id
-        else:
-            # Create a new pump with this name
-            new_pump = Pump(
-                id=uuid4(),
-                station_id=station_id,
-                name=data.pump_id,
-                is_active=True,
-            )
-            db.add(new_pump)
-            await db.flush()
-            pump_uuid = new_pump.id
-    else:
-        # Get or create a default "Unassigned" pump
-        default_pump_stmt = select(Pump).where(Pump.name == "Unassigned", Pump.station_id == station_id)
-        default_pump_result = await db.execute(default_pump_stmt)
-        default_pump = default_pump_result.scalar_one_or_none()
-        if default_pump:
-            pump_uuid = default_pump.id
-        else:
-            new_pump = Pump(
-                id=uuid4(),
-                station_id=station_id,
-                name="Unassigned",
-                is_active=True,
-            )
-            db.add(new_pump)
-            await db.flush()
-            pump_uuid = new_pump.id
-            
-    nozzle.pump_id = pump_uuid
     await db.flush()
     
     # Fetch updated nozzle with related data
@@ -668,19 +604,18 @@ async def update_nozzle(
                FuelProduct.code.label("product_code"), FuelProduct.price_per_liter)
         .join(Pump, Nozzle.pump_id == Pump.id)
         .join(FuelProduct, Nozzle.product_id == FuelProduct.id)
-        .where(Nozzle.nozzle_id == nozzle.nozzle_id)
+        .where(Nozzle.id == nozzle.id)
     )
     result = await db.execute(stmt)
     row = result.one()
     
-    # Convert UUID to string if needed
-    nozzle_id_str = str(nozzle.nozzle_id) if hasattr(nozzle.nozzle_id, 'hex') else nozzle.nozzle_id
     return NozzleRead(
-        nozzle_id=nozzle_id_str,
+        id=nozzle.id,
+        nozzle_code=nozzle.nozzle_code,
+        nozzle_name=nozzle.nozzle_name,
         pump_id=nozzle.pump_id,
         tank_id=nozzle.tank_id,
         product_id=nozzle.product_id,
-        nozzle_name=nozzle.nozzle_name,
         is_active=nozzle.is_active,
         pump_name=row[1],
         product_name=row[2],
@@ -689,13 +624,12 @@ async def update_nozzle(
     )
 
 
-async def delete_nozzle(station_id: UUID, nozzle_id: str, db: AsyncSession) -> None:
+async def delete_nozzle(station_id: UUID, nozzle_id: UUID, db: AsyncSession) -> None:
     """Delete (deactivate) a nozzle."""
-    # nozzle_id is now VARCHAR in database, use directly as string
     stmt = (
         select(Nozzle)
         .join(Pump, Nozzle.pump_id == Pump.id)
-        .where(Nozzle.nozzle_id == nozzle_id, Pump.station_id == station_id)
+        .where(Nozzle.id == nozzle_id, Pump.station_id == station_id)
     )
     result = await db.execute(stmt)
     nozzle = result.scalar_one_or_none()
@@ -704,4 +638,54 @@ async def delete_nozzle(station_id: UUID, nozzle_id: str, db: AsyncSession) -> N
     
     nozzle.is_active = False
     await db.flush()
+
+
+async def create_pump(
+    station_id: UUID,
+    data: PumpCreate,
+    db: AsyncSession
+) -> PumpRead:
+    """Create a new pump."""
+    pump = Pump(
+        id=uuid4(),
+        station_id=station_id,
+        name=data.name,
+        location=data.location,
+        is_active=True,
+    )
+    db.add(pump)
+    await db.flush()
+    return PumpRead.model_validate(pump)
+
+
+async def update_pump(
+    station_id: UUID,
+    pump_id: UUID,
+    data: PumpCreate,
+    db: AsyncSession
+) -> PumpRead:
+    """Update a pump."""
+    stmt = select(Pump).where(Pump.id == pump_id, Pump.station_id == station_id)
+    result = await db.execute(stmt)
+    pump = result.scalar_one_or_none()
+    if not pump:
+        raise ValueError("Pump not found")
+    
+    pump.name = data.name
+    pump.location = data.location
+    await db.flush()
+    return PumpRead.model_validate(pump)
+
+
+async def delete_pump(station_id: UUID, pump_id: UUID, db: AsyncSession) -> None:
+    """Delete (deactivate) a pump."""
+    stmt = select(Pump).where(Pump.id == pump_id, Pump.station_id == station_id)
+    result = await db.execute(stmt)
+    pump = result.scalar_one_or_none()
+    if not pump:
+        raise ValueError("Pump not found")
+    
+    pump.is_active = False
+    await db.flush()
+
 

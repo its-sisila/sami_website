@@ -7,6 +7,13 @@
 // Common Types
 // ============================================================================
 
+export interface AccountTrendStat {
+    period: string;
+    outstanding: number;
+    payments: number;
+    credit_limit: number;
+}
+
 export type UUID = string;
 
 // ============================================================================
@@ -62,7 +69,8 @@ export interface Pump {
 }
 
 export interface Nozzle {
-    nozzle_id: string; // Primary key is string here
+    id: UUID; // UUID primary key
+    nozzle_code: string | null; // Human-readable ID (e.g., N-LAD-1)
     pump_id: UUID;
     tank_id: UUID;
     product_id: UUID;
@@ -74,6 +82,7 @@ export interface Nozzle {
     pump_name?: string;
     tank_name?: string;
     product_name?: string;
+    product_code?: string;
     price_per_liter?: number; // From joined product data
 }
 
@@ -86,7 +95,7 @@ export interface TankCreate {
 }
 
 export interface NozzleReadingEntry {
-    nozzle_id: string;
+    nozzle_id: UUID;
     end_meter: number;
 }
 
@@ -392,7 +401,7 @@ export interface SaleCreditEntry {
 
 export interface SaleEntryCreate {
     shift_id: UUID;
-    nozzle_id: string;  // VARCHAR nozzle ID like "LAD-1"
+    nozzle_id: UUID;  // UUID nozzle ID
     employee_id?: UUID | null;
     start_meter_digital: number;
     end_meter_digital: number;
@@ -496,7 +505,7 @@ export interface DailySalesSummary {
 }
 
 export interface TankNozzleSales {
-    nozzle_id: string;
+    nozzle_id: UUID;
     nozzle_name: string;
     day_liters: number;
     night_liters: number;
@@ -514,7 +523,7 @@ export interface SalesHistoryItem {
     id: UUID;
     shift_date: string;
     shift_type: ShiftType;
-    nozzle_id: string;
+    nozzle_id: UUID;
     nozzle_name: string | null;
     product_name: string | null;
     product_code: string | null;
@@ -576,6 +585,13 @@ export interface CompanyAccountCreate {
     email?: string | null;
     address?: string | null;
     credit_limit?: number;
+}
+
+export interface AccountTrendStat {
+    period: string;
+    outstanding: number;
+    payments: number;
+    credit_limit: number;
 }
 
 export interface CompanyAccountUpdate {

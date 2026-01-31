@@ -174,7 +174,7 @@ export default function SalesPage() {
                 // Map nozzles for dropdown (available nozzles)
                 setAvailableNozzles(
                     nozzlesData.map((n: ApiNozzle) => ({
-                        id: n.nozzle_id,
+                        id: n.id,
                         displayName: n.nozzle_name || 'Unknown',  // e.g., LAD-1
                         pumpName: n.pump_name || n.nozzle_name || 'Unknown',
                         productName: n.product_name || 'Unknown',
@@ -193,13 +193,13 @@ export default function SalesPage() {
                 // Populate full nozzles state with start meter from previous shift
                 setNozzles(
                     nozzlesData.map((n: ApiNozzle) => ({
-                        id: n.nozzle_id,
+                        id: n.id,
                         displayName: n.nozzle_name || 'Unknown',  // e.g., LAD-1
                         pumpName: n.pump_name || n.nozzle_name || 'Unknown',
                         productName: n.product_name || 'Unknown',
                         productPrice: n.price_per_liter || 0,
-                        startMeter: (lastReadings as Record<string, number>)[n.nozzle_id] || 0,
-                        endMeterDigital: (lastReadings as Record<string, number>)[n.nozzle_id] || 0,
+                        startMeter: (lastReadings as Record<string, number>)[n.id] || 0,
+                        endMeterDigital: (lastReadings as Record<string, number>)[n.id] || 0,
                         endMeterAnalog: 0,
                         isSubmitted: false,
                         cardEntries: [],
@@ -673,7 +673,7 @@ export default function SalesPage() {
             const nozzlesData = await api.inventory.getNozzles();
             setAvailableNozzles(
                 nozzlesData.map((n) => ({
-                    id: n.nozzle_id,
+                    id: n.id,
                     displayName: n.nozzle_name || 'Unknown',
                     pumpName: n.pump_name || n.nozzle_name || 'Unknown',
                     productName: n.product_name || 'Unknown',
@@ -682,7 +682,7 @@ export default function SalesPage() {
             );
             setNozzles(
                 nozzlesData.map((n) => ({
-                    id: n.nozzle_id,
+                    id: n.id,
                     displayName: n.nozzle_name || 'Unknown',
                     pumpName: n.pump_name || n.nozzle_name || 'Unknown',
                     productName: n.product_name || 'Unknown',
@@ -1500,8 +1500,8 @@ export default function SalesPage() {
                                                                 value={currentNozzle.id}
                                                                 onChange={(e) => setSelectedNozzleId(e.target.value)}
                                                             >
-                                                                {unsubmittedNozzles.map(n => (
-                                                                    <option key={n.id} value={n.id}>{n.displayName} ({n.productName})</option>
+                                                                {unsubmittedNozzles.map((n, idx) => (
+                                                                    <option key={`${n.id}-${idx}`} value={n.id}>{n.displayName} ({n.productName})</option>
                                                                 ))}
                                                             </select>
                                                         </div>

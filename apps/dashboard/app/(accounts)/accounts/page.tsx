@@ -38,7 +38,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { BankManagerDialog } from "@/components/accounts/BankManagerDialog"
 import { ReportsDialog } from "@/components/accounts/ReportsDialog"
 import { api } from "@/lib/api/client"
-import { useAccounts, useExpenses, useCardTerminals, useCardSettlements, useShiftSettlements, useBanks } from "@/lib/hooks"
+import { useAccounts, useExpenses, useCardTerminals, useCardSettlements, useShiftSettlements, useBanks, useAccountTrends } from "@/lib/hooks"
 import { mutate } from "swr"
 import { useReconciliation, useSalesChart } from "@/lib/hooks/use-reconcile"
 import { CategoryManagerDialog } from "@/components/accounts/CategoryManagerDialog"
@@ -496,45 +496,19 @@ function CompanyAccountsTable({ companies }: CompanyAccountsTableProps) {
     // Chart range filter
     const [chartRange, setChartRange] = React.useState<"6months" | "12months" | "year">("6months")
 
-    // Generate mock trend data for company accounts based on range
-    const chartData = React.useMemo(() => {
-        const data = []
-        const totalCreditLimit = companies.reduce((sum, c) => sum + c.creditLimit, 0)
+    // Fetch trends data
+    const { data: trends, isLoading: isTrendsLoading } = useAccountTrends(chartRange)
 
-        if (chartRange === "6months") {
-            const monthNames = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            for (let i = 0; i < 6; i++) {
-                data.push({
-                    period: monthNames[i],
-                    outstanding: Math.round(800000 + (i * 50000) + (Math.random() * 150000)),
-                    payments: Math.round(600000 + (Math.random() * 300000)),
-                    creditLimit: totalCreditLimit
-                })
-            }
-        } else if (chartRange === "12months") {
-            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            for (let i = 0; i < 12; i++) {
-                data.push({
-                    period: monthNames[i],
-                    outstanding: Math.round(700000 + (i * 30000) + (Math.random() * 200000)),
-                    payments: Math.round(500000 + (Math.random() * 400000)),
-                    creditLimit: totalCreditLimit
-                })
-            }
-        } else {
-            // Yearly - show last 3 years
-            const years = ['2023', '2024', '2025']
-            for (let i = 0; i < 3; i++) {
-                data.push({
-                    period: years[i],
-                    outstanding: Math.round(9000000 + (i * 500000) + (Math.random() * 1000000)),
-                    payments: Math.round(8000000 + (Math.random() * 2000000)),
-                    creditLimit: totalCreditLimit * 12
-                })
-            }
-        }
-        return data
-    }, [companies, chartRange])
+    // Chart data - map API response to chart format
+    const chartData = React.useMemo(() => {
+        if (!trends) return []
+        return trends.map(t => ({
+            period: t.period,
+            outstanding: t.outstanding,
+            payments: t.payments,
+            creditLimit: t.credit_limit // Map snake_case to camelCase
+        }))
+    }, [trends])
 
     // Summary stats
     const totalOutstanding = companies.reduce((sum, c) => sum + (c.currentBalance > 0 ? c.currentBalance : 0), 0)

@@ -129,3 +129,11 @@ class BankAccountRead(BankAccountBase):
     updated_at: datetime
     
     model_config = {"from_attributes": True}
+
+
+class AccountTrendStat(BaseModel):
+    """Account trend statistics for a period."""
+    period: str
+    outstanding: float
+    payments: float
+    credit_limit: float

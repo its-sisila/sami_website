@@ -16,7 +16,10 @@ from app.modules.accounts.schemas import (
     CompanyAccountCreate, CompanyAccountUpdate,
     TransactionCreate, TransactionWithBalance,
     BankAccountCreate, BankAccountUpdate,
+    AccountTrendStat,
 )
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 
 # ============================================================================
@@ -215,3 +218,96 @@ async def delete_bank(
     """Soft delete a bank account."""
     bank.is_active = False
     await db.flush()
+
+
+# ============================================================================
+# Analytics
+# ============================================================================
+
+async def get_account_trends(
+    station_id: UUID,
+    range_type: str,
+    db: AsyncSession
+) -> list[AccountTrendStat]:
+    """
+    Get trend data for accounts (outstanding vs payments).
+    range_type: "6months", "12months", "year"
+    """
+    # 1. Get current state of all active accounts
+    accounts = await list_accounts(station_id, db, active_only=True)
+    if not accounts:
+        return []
+        
+    current_total_balance = sum(acc.current_balance for acc in accounts)
+    total_credit_limit = sum(acc.credit_limit for acc in accounts)
+    
+    # 2. Determine date range
+    today = datetime.utcnow().date()
+    months_count = 6
+    if range_type == "12months" or range_type == "year":
+        months_count = 12
+        
+    # Start form 1st of the starting month
+    start_date = (today - relativedelta(months=months_count-1)).replace(day=1)
+    
+    # 3. Fetch all transactions in the range
+    stmt = (
+        select(CompanyTransaction)
+        .join(CompanyAccount)
+        .where(CompanyAccount.station_id == station_id)
+        .where(CompanyTransaction.created_at >= start_date)
+        .order_by(CompanyTransaction.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    transactions = result.scalars().all()
+    
+    # 4. Group by month
+    # type: dict[str, list[CompanyTransaction]]
+    tx_by_month = {}  
+    
+    # Initialize buckets for all requested months
+    months = []
+    for i in range(months_count):
+        d = (today - relativedelta(months=i))
+        key = d.strftime("%Y-%m")
+        label = d.strftime("%b") # Jan, Feb
+        months.append((key, label))
+        tx_by_month[key] = []
+        
+    for tx in transactions:
+        key = tx.created_at.strftime("%Y-%m")
+        if key in tx_by_month:
+            tx_by_month[key].append(tx)
+            
+    # 5. Walk backwards to calculate historical balance
+    # We allow the current month (partial) to show current balance
+    
+    trend_data = []
+    running_balance = float(current_total_balance)
+    
+    # Iterate from newest (months[0]) to oldest (months[-1])
+    # months list generated above is [current, current-1, ...]
+    
+    for key, label in months:
+        month_txs = tx_by_month.get(key, [])
+        
+        month_credits = sum(float(tx.amount) for tx in month_txs if tx.transaction_type == TransactionType.credit)
+        month_debits = sum(float(tx.amount) for tx in month_txs if tx.transaction_type == TransactionType.debit)
+        
+        # Snapshot at END of this month is running_balance
+        stats = AccountTrendStat(
+            period=label,
+            outstanding=running_balance,
+            payments=month_credits,
+            credit_limit=float(total_credit_limit)
+        )
+        trend_data.append(stats)
+        
+        # Calculate balance at START of this month (end of previous)
+        # EndBal = StartBal + Debits - Credits
+        # StartBal = EndBal - Debits + Credits
+        prev_balance = running_balance - month_debits + month_credits
+        running_balance = prev_balance
+
+    # Return chronological order (oldest to newest)
+    return list(reversed(trend_data))

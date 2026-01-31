@@ -20,7 +20,7 @@ from app.modules.inventory.schemas import (
     TankReadingCreate, TankReadingRead,
     FuelDeliveryCreate, FuelDeliveryRead,
     NozzleCreate, NozzleRead,
-    PumpRead,
+    PumpRead, PumpCreate,
 )
 
 
@@ -35,16 +35,24 @@ router = APIRouter()
 async def list_products(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
-    """List all fuel products for the station."""
-    if not current_user.station_id:
+    """List all fuel products for the station.
+    
+    System admins can provide station_id query param to view any station's products.
+    """
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not assigned to a station",
         )
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
-    products = await service.list_products(station_id, db)
+    products = await service.list_products(target_station_id, db)
     return products
 
 
@@ -53,17 +61,25 @@ async def create_product(
     data: FuelProductCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
-    """Create a new fuel product for the station."""
-    if not current_user.station_id:
+    """Create a new fuel product for the station.
+    
+    System admins can provide station_id query param to create products for any station.
+    """
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not assigned to a station",
         )
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     try:
-        product = await service.create_product(station_id, data, db)
+        product = await service.create_product(target_station_id, data, db)
         await db.commit()
         return product
     except ValueError as e:
@@ -76,14 +92,19 @@ async def update_product(
     data: FuelProductCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """Update a fuel product."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a station")
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     try:
-        product = await service.update_product(station_id, product_id, data, db)
+        product = await service.update_product(target_station_id, product_id, data, db)
         await db.commit()
         return product
     except ValueError as e:
@@ -95,14 +116,19 @@ async def delete_product(
     product_id: UUID,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """Delete a fuel product."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a station")
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     try:
-        await service.delete_product(station_id, product_id, db)
+        await service.delete_product(target_station_id, product_id, db)
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -117,15 +143,22 @@ async def list_tanks(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     for_date: str | None = None,
+    station_id: str | None = None,
 ):
-    """List all tanks with current levels, or levels for a specific date."""
-    if not current_user.station_id:
+    """List all tanks with current levels, or levels for a specific date.
+    
+    System admins can provide station_id query param to view any station's tanks.
+    """
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not assigned to a station",
         )
-    
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     
     # Parse date if provided
     from datetime import date
@@ -139,7 +172,7 @@ async def list_tanks(
                 detail="Invalid date format. Use YYYY-MM-DD",
             )
     
-    tanks = await service.list_tanks(station_id, db, for_date=parsed_date)
+    tanks = await service.list_tanks(target_station_id, db, for_date=parsed_date)
     return tanks
 
 
@@ -148,16 +181,21 @@ async def create_tank(
     data: TankCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """Create a new tank."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not assigned to a station",
         )
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
-    tank = await service.create_tank(station_id, data, db)
+    tank = await service.create_tank(target_station_id, data, db)
     return tank
 
 
@@ -167,14 +205,19 @@ async def update_tank(
     data: TankCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """Update a tank."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a station")
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     try:
-        tank = await service.update_tank(station_id, tank_id, data, db)
+        tank = await service.update_tank(target_station_id, tank_id, data, db)
         await db.commit()
         return tank
     except ValueError as e:
@@ -186,14 +229,19 @@ async def delete_tank(
     tank_id: UUID,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """Delete a tank."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a station")
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     try:
-        await service.delete_tank(station_id, tank_id, db)
+        await service.delete_tank(target_station_id, tank_id, db)
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -308,16 +356,24 @@ async def record_delivery(
 async def list_nozzles(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
-    """List all nozzles for the station with pump and product info."""
-    if not current_user.station_id:
+    """List all nozzles for the station with pump and product info.
+    
+    System admins can provide station_id query param to view any station's nozzles.
+    """
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not assigned to a station",
         )
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
-    nozzles = await service.list_nozzles(station_id, db)
+    nozzles = await service.list_nozzles(target_station_id, db)
     return nozzles
 
 
@@ -326,17 +382,22 @@ async def create_nozzle(
     data: NozzleCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """Create a new nozzle."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not assigned to a station",
         )
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     try:
-        nozzle = await service.create_nozzle(station_id, data, db)
+        nozzle = await service.create_nozzle(target_station_id, data, db)
         await db.commit()
         return nozzle
     except ValueError as e:
@@ -345,18 +406,23 @@ async def create_nozzle(
 
 @router.put("/nozzles/{nozzle_id}", response_model=NozzleRead)
 async def update_nozzle(
-    nozzle_id: str,
+    nozzle_id: UUID,
     data: NozzleCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """Update a nozzle."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a station")
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     try:
-        nozzle = await service.update_nozzle(station_id, nozzle_id, data, db)
+        nozzle = await service.update_nozzle(target_station_id, nozzle_id, data, db)
         await db.commit()
         return nozzle
     except ValueError as e:
@@ -365,17 +431,22 @@ async def update_nozzle(
 
 @router.delete("/nozzles/{nozzle_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_nozzle(
-    nozzle_id: str,
+    nozzle_id: UUID,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """Delete a nozzle."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a station")
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
     try:
-        await service.delete_nozzle(station_id, nozzle_id, db)
+        await service.delete_nozzle(target_station_id, nozzle_id, db)
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -389,14 +460,92 @@ async def delete_nozzle(
 async def list_pumps(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
 ):
     """List all pumps for the station."""
-    if not current_user.station_id:
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not assigned to a station",
         )
     
-    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
-    pumps = await service.list_pumps(station_id, db)
+    pumps = await service.list_pumps(target_station_id, db)
     return pumps
+
+
+@router.post("/pumps", response_model=PumpRead, status_code=status.HTTP_201_CREATED)
+async def create_pump(
+    data: PumpCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
+):
+    """Create a new pump."""
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not assigned to a station",
+        )
+    
+    pump = await service.create_pump(target_station_id, data, db)
+    await db.commit()
+    return pump
+
+
+@router.put("/pumps/{pump_id}", response_model=PumpRead)
+async def update_pump(
+    pump_id: UUID,
+    data: PumpCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
+):
+    """Update a pump."""
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a station")
+    
+    try:
+        pump = await service.update_pump(target_station_id, pump_id, data, db)
+        await db.commit()
+        return pump
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/pumps/{pump_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pump(
+    pump_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    station_id: str | None = None,
+):
+    """Delete a pump."""
+    # Allow system_admin to override station context via query param
+    if station_id and current_user.role == "system_admin":
+        target_station_id = UUID(station_id)
+    elif current_user.station_id:
+        target_station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a station")
+    
+    try:
+        await service.delete_pump(target_station_id, pump_id, db)
+        await db.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+

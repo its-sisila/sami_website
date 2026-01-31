@@ -68,7 +68,7 @@ class SaleCreditEntry(BaseModel):
 class SaleEntryCreate(BaseModel):
     """Schema for recording nozzle meter readings."""
     shift_id: UUID | None = None  # Optional - can be provided via URL path in complete_shift
-    nozzle_id: str  # VARCHAR nozzle ID like "LAD-1"
+    nozzle_id: UUID  # UUID nozzle ID
     employee_id: UUID | None = None  # Pumper assigned
     start_meter_digital: Decimal
     end_meter_digital: Decimal
@@ -104,7 +104,7 @@ class SaleRead(BaseModel):
     """Sale response schema - includes calculated fields."""
     id: UUID
     shift_id: UUID
-    nozzle_id: str  # VARCHAR nozzle ID like "LAD-1"
+    nozzle_id: UUID  # UUID nozzle ID
     employee_id: UUID | None = None
     start_meter_digital: Decimal
     end_meter_digital: Decimal
@@ -194,7 +194,7 @@ class DailySalesSummary(BaseModel):
 class CardSaleCreate(BaseModel):
     """Schema for creating a card sale entry."""
     sale_id: UUID | None = None  # Optional: links to specific nozzle sale
-    nozzle_id: str | None = None  # Optional - can be global or per-nozzle (VARCHAR like 'N-LP95-1')
+    nozzle_id: UUID | None = None  # Optional - can be global or per-nozzle
     terminal_id: UUID
     batch_number: str | None = None
     settlement_datetime: datetime | None = None
@@ -224,7 +224,7 @@ class CardSaleRead(BaseModel):
 class CreditSaleCreate(BaseModel):
     """Schema for creating a credit sale entry."""
     sale_id: UUID | None = None  # Optional: links to specific nozzle sale
-    nozzle_id: str | None = None  # Optional - can be global or per-nozzle (VARCHAR like 'N-LP95-1')
+    nozzle_id: UUID | None = None  # Optional - can be global or per-nozzle
     account_id: UUID  # Company account
     po_number: str | None = None
     vehicle_number: str | None = None
@@ -269,7 +269,7 @@ class ShiftCompletePayload(BaseModel):
 
 class TankNozzleSales(BaseModel):
     """Sales for a single nozzle in day/night shifts."""
-    nozzle_id: str
+    nozzle_id: UUID
     nozzle_name: str
     day_liters: Decimal
     night_liters: Decimal
@@ -293,7 +293,7 @@ class SalesHistoryItem(BaseModel):
     id: UUID
     shift_date: date
     shift_type: ShiftType
-    nozzle_id: str
+    nozzle_id: UUID
     nozzle_name: str | None = None
     product_name: str | None = None
     product_code: str | None = None
