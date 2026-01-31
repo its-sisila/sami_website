@@ -17,6 +17,7 @@ from app.modules.accounts import service
 from app.modules.accounts.schemas import (
     CompanyAccountCreate, CompanyAccountUpdate, CompanyAccountRead,
     TransactionCreate, TransactionRead, TransactionWithBalance,
+    AccountTrendStat,
 )
 
 
@@ -141,6 +142,21 @@ async def delete_bank(
     
     await service.delete_bank(bank, db)
     return None
+
+
+@router.get("/trends", response_model=list[AccountTrendStat])
+async def get_account_trends(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    range: str = Query("6months", regex="^(6months|12months|year)$"),
+):
+    """Get account balance trends."""
+    if not current_user.station_id:
+        raise HTTPException(status_code=400, detail="User is not assigned to a station")
+    
+    station_id = UUID(current_user.station_id) if isinstance(current_user.station_id, str) else current_user.station_id
+    trends = await service.get_account_trends(station_id, range, db)
+    return trends
 
 
 @router.get("/{account_id}", response_model=CompanyAccountRead)
