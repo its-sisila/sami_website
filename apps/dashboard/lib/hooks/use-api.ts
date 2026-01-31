@@ -35,7 +35,6 @@ import type {
     WeeklySalesStat,
     UserWithStation,
     BankAccount,
-    BankAccount,
     DailySalesSummary,
     AccountTrendStat,
 } from '@/lib/api/types';
