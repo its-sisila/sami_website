@@ -49,7 +49,7 @@ export function RegulatoryReturnForm() {
             return;
         }
 
-        const selectedNozzle = nozzles?.find(n => n.nozzle_id === nozzleId);
+        const selectedNozzle = nozzles?.find(n => n.id === nozzleId);
         if (!selectedNozzle) {
             toast.error("Invalid nozzle selected");
             return;
@@ -109,7 +109,7 @@ export function RegulatoryReturnForm() {
             return;
         }
 
-        const selectedNozzle = nozzles?.find(n => n.nozzle_id === nozzleId);
+        const selectedNozzle = nozzles?.find(n => n.id === nozzleId);
         if (!selectedNozzle) {
             toast.error("Invalid nozzle selected");
             return;
@@ -198,8 +198,8 @@ export function RegulatoryReturnForm() {
                             </SelectTrigger>
                             <SelectContent>
                                 {nozzles?.map((n) => (
-                                    <SelectItem key={n.nozzle_id} value={n.nozzle_id}>
-                                        {n.nozzle_name || n.nozzle_id} {n.product_name ? `(${n.product_name})` : ''}
+                                    <SelectItem key={n.id} value={n.id}>
+                                        {n.nozzle_name || n.nozzle_code || 'Unknown'} {n.product_name ? `(${n.product_name})` : ''}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
