@@ -7,6 +7,13 @@
 // Common Types
 // ============================================================================
 
+export interface AccountTrendStat {
+    period: string;
+    outstanding: number;
+    payments: number;
+    credit_limit: number;
+}
+
 export type UUID = string;
 
 // ============================================================================
@@ -578,6 +585,13 @@ export interface CompanyAccountCreate {
     email?: string | null;
     address?: string | null;
     credit_limit?: number;
+}
+
+export interface AccountTrendStat {
+    period: string;
+    outstanding: number;
+    payments: number;
+    credit_limit: number;
 }
 
 export interface CompanyAccountUpdate {

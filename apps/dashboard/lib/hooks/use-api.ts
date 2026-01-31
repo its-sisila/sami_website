@@ -35,7 +35,9 @@ import type {
     WeeklySalesStat,
     UserWithStation,
     BankAccount,
+    BankAccount,
     DailySalesSummary,
+    AccountTrendStat,
 } from '@/lib/api/types';
 
 // Default SWR configuration
@@ -347,6 +349,17 @@ export function useTransactions(accountId: string | null, limit = 50, config?: S
     return useSWR<Transaction[], Error>(
         accountId ? `/accounts/${accountId}/transactions?limit=${limit}` : null,
         () => accountId ? api.accounts.getTransactions(accountId, limit) : Promise.reject('No account ID'),
+        { ...defaultConfig, ...config }
+    );
+}
+
+/**
+ * Fetch account balance trends
+ */
+export function useAccountTrends(range: "6months" | "12months" | "year", config?: SWRConfiguration) {
+    return useSWR<AccountTrendStat[], Error>(
+        `/accounts/trends?range=${range}`,
+        () => api.accounts.getTrends(range),
         { ...defaultConfig, ...config }
     );
 }

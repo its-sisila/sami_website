@@ -82,6 +82,7 @@ import type {
     ExpenseCategoryCreate,
     ExpenseCategoryUpdate,
     DailySalesSummary,
+    AccountTrendStat,
 } from './types';
 
 
@@ -995,6 +996,12 @@ export const accounts = {
      */
     deleteBank: (id: string) =>
         request<void>(`/accounts/banks/${id}`, { method: 'DELETE' }),
+
+    /**
+     * Get account balance trends
+     */
+    getTrends: (range: "6months" | "12months" | "year") =>
+        request<AccountTrendStat[]>(`/accounts/trends?range=${range}`),
 };
 
 // ============================================================================
