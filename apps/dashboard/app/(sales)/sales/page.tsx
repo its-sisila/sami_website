@@ -1500,8 +1500,8 @@ export default function SalesPage() {
                                                                 value={currentNozzle.id}
                                                                 onChange={(e) => setSelectedNozzleId(e.target.value)}
                                                             >
-                                                                {unsubmittedNozzles.map(n => (
-                                                                    <option key={n.id} value={n.id}>{n.displayName} ({n.productName})</option>
+                                                                {unsubmittedNozzles.map((n, idx) => (
+                                                                    <option key={`${n.id}-${idx}`} value={n.id}>{n.displayName} ({n.productName})</option>
                                                                 ))}
                                                             </select>
                                                         </div>
