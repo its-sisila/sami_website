@@ -24,6 +24,7 @@ import {
     X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCurrentUser } from "@/lib/hooks";
 
 const NAV_ITEMS = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -34,14 +35,20 @@ const NAV_ITEMS = [
     { name: "Accounts", href: "/accounts", icon: ChartColumnIncreasing },
     { name: "Staff", href: "/staff", icon: UserCog },
     { name: "Settings", href: "/settings", icon: Settings },
-    { name: "Admin Panel", href: "/admin", icon: Shield },
+    { name: "Admin Panel", href: "/admin", icon: Shield, requiresRole: 'system_admin' },
 ];
 
 export function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
     const { user, signOut, isLoading } = useAuth();
+    const { data: currentUser } = useCurrentUser();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // Filter navigation items based on user role
+    const visibleNavItems = NAV_ITEMS.filter(item =>
+        !item.requiresRole || currentUser?.role === item.requiresRole
+    );
 
     const handleLogout = async () => {
         await signOut();
@@ -62,7 +69,7 @@ export function Sidebar() {
 
             {/* Navigation */}
             <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
-                {NAV_ITEMS.map((item) => {
+                {visibleNavItems.map((item) => {
                     const isActive = pathname.startsWith(item.href);
                     const Icon = item.icon;
 

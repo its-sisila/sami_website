@@ -9,7 +9,7 @@ import { api } from '@/lib/api/client';
 import { useStations, useAuditLog, useSupportAccess, useCurrentUser } from '@/lib/hooks';
 import { useRouter } from 'next/navigation';
 import { mutate } from 'swr';
-import { Loader2, ArrowRightCircle } from 'lucide-react';
+import { Loader2, ArrowRightCircle, Shield } from 'lucide-react';
 import { User } from '@/lib/api/types';
 
 // Mock Data Fallback
@@ -40,25 +40,34 @@ export default function AdminPage() {
     const [isToggling, setIsToggling] = useState(false);
 
     // Station Configuration State
-    const [configTab, setConfigTab] = useState<'details' | 'products' | 'tanks' | 'nozzles'>('details');
+    const [configTab, setConfigTab] = useState<'details' | 'products' | 'tanks' | 'nozzles' | 'pumps' | 'users'>('details');
     const [products, setProducts] = useState<{ id: string; code: string; name: string; price_per_liter: number }[]>([]);
     const [tanks, setTanks] = useState<{ id: string; name: string; product_id: string; product_name?: string; tank_type?: string; capacity_liters: number }[]>([]);
     const [nozzles, setNozzles] = useState<any[]>([]);
+    const [pumps, setPumps] = useState<{ id: string; name: string; location?: string; is_active: boolean }[]>([]);
     const [isLoadingConfig, setIsLoadingConfig] = useState(false);
 
     // Add forms state
     const [showAddProduct, setShowAddProduct] = useState(false);
     const [showAddTank, setShowAddTank] = useState(false);
     const [showAddNozzle, setShowAddNozzle] = useState(false);
+    const [showAddPump, setShowAddPump] = useState(false);
+    const [showAddUser, setShowAddUser] = useState(false);
 
     // Edit state
     const [editingProduct, setEditingProduct] = useState<string | null>(null);
     const [editingTank, setEditingTank] = useState<string | null>(null);
     const [editingNozzle, setEditingNozzle] = useState<string | null>(null);
+    const [editingPump, setEditingPump] = useState<string | null>(null);
+    const [editingUser, setEditingUser] = useState<string | null>(null);
 
     const [newProduct, setNewProduct] = useState({ code: '', name: '', price_per_liter: '' });
     const [newTank, setNewTank] = useState({ name: '', product_id: '', tank_type: '', capacity_liters: '', color: '' });
     const [newNozzle, setNewNozzle] = useState({ nozzle_id: '', nozzle_name: '', tank_id: '', product_id: '', pump_id: '' });
+    const [newPump, setNewPump] = useState({ name: '', location: '' });
+    const [newUser, setNewUser] = useState({ email: '', full_name: '', role: 'supervisor' as 'manager' | 'accountant' | 'supervisor' });
+    const [passwordResetUser, setPasswordResetUser] = useState<{ id: string; name: string } | null>(null);
+    const [newPassword, setNewPassword] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
     // Onboard Station Modal state
@@ -67,7 +76,7 @@ export default function AdminPage() {
     const [isOnboarding, setIsOnboarding] = useState(false);
 
     // Confirm dialog state
-    const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'nozzle' | 'tank' | 'product' | null; id: string; name: string }>({ type: null, id: '', name: '' });
+    const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'nozzle' | 'tank' | 'product' | 'pump' | 'user' | null; id: string; name: string }>({ type: null, id: '', name: '' });
 
     // Station Details Editing State
     const [stationDetails, setStationDetails] = useState({ name: '', address: '', phone: '', email: '', status: 'active' as 'setup' | 'active' | 'suspended' | 'archived' });
@@ -89,8 +98,43 @@ export default function AdminPage() {
 
     // Access Dashboard State
     const router = useRouter();
-    const { data: currentUser } = useCurrentUser();
+    const { data: currentUser, isLoading: userLoading } = useCurrentUser();
     const [isAssigningMyStation, setIsAssigningMyStation] = useState(false);
+
+    // System Admin Access Control
+    useEffect(() => {
+        if (!userLoading && currentUser && currentUser.role !== 'system_admin') {
+            router.push('/dashboard');
+        }
+    }, [currentUser, userLoading, router]);
+
+    // Show loading while checking permissions
+    if (userLoading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            </div>
+        );
+    }
+
+    // Show access denied if not system_admin
+    if (!currentUser || currentUser.role !== 'system_admin') {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Shield className="h-16 w-16 text-slate-400 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
+                    <p className="text-slate-600 mb-4">You do not have permission to access the Admin Panel.</p>
+                    <button
+                        onClick={() => router.push('/dashboard')}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                    >
+                        Return to Dashboard
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     // Fetch station configuration data when station is selected
     useEffect(() => {
@@ -98,22 +142,25 @@ export default function AdminPage() {
             setProducts([]);
             setTanks([]);
             setNozzles([]);
+            setPumps([]);
             return;
         }
 
         const fetchConfigData = async () => {
             setIsLoadingConfig(true);
             try {
-                const [productsData, tanksData, nozzlesData, usersData] = await Promise.all([
-                    api.inventory.getProducts(),
-                    api.inventory.getTanks(),
-                    api.inventory.getNozzles(),
+                const [productsData, tanksData, nozzlesData, usersData, pumpsData] = await Promise.all([
+                    api.inventory.getProducts(selectedStationId),
+                    api.inventory.getTanks(undefined, selectedStationId),
+                    api.inventory.getNozzles(selectedStationId),
                     api.users.getAll(selectedStationId),
+                    api.inventory.getPumps(selectedStationId),
                 ]);
                 setProducts(productsData.map(p => ({ id: p.id, code: p.code, name: p.name, price_per_liter: p.price_per_liter })));
                 setTanks(tanksData.map(t => ({ id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name ?? undefined, tank_type: t.tank_type ?? undefined, capacity_liters: t.capacity_liters })));
                 setNozzles(nozzlesData.map(n => ({
-                    nozzle_id: n.nozzle_id,
+                    id: n.id,
+                    nozzle_code: n.nozzle_code,
                     nozzle_name: n.nozzle_name || 'Unnamed',
                     tank_id: n.tank_id,
                     pump_id: n.pump_id,
@@ -122,6 +169,7 @@ export default function AdminPage() {
                     product_name: n.product_name ?? undefined,
                     is_active: n.is_active,
                 } as any)));
+                setPumps(pumpsData);
                 setStationUsers(usersData);
                 const owner = usersData.find(u => u.role === 'owner') || null;
                 setOwnerUser(owner);
@@ -269,6 +317,15 @@ export default function AdminPage() {
             });
             // Refresh stations list
             mutate('/admin/stations');
+            // Clear selected station and config data to prevent stale data from showing
+            setSelectedStationId('');
+            setProducts([]);
+            setTanks([]);
+            setNozzles([]);
+            setPumps([]);
+            setStationUsers([]);
+            setOwnerUser(null);
+            // Reset form and close modal
             setNewStation({ name: '', owner_email: '', address: '', phone: '' });
             setShowOnboardModal(false);
             alert('Station onboarded successfully!');
@@ -284,15 +341,17 @@ export default function AdminPage() {
         if (!selectedStationId) return;
         setIsLoadingConfig(true);
         try {
-            const [productsData, tanksData, nozzlesData] = await Promise.all([
-                api.inventory.getProducts(),
-                api.inventory.getTanks(),
-                api.inventory.getNozzles(),
+            const [productsData, tanksData, nozzlesData, pumpsData] = await Promise.all([
+                api.inventory.getProducts(selectedStationId),
+                api.inventory.getTanks(undefined, selectedStationId),
+                api.inventory.getNozzles(selectedStationId),
+                api.inventory.getPumps(selectedStationId),
             ]);
             setProducts(productsData.map(p => ({ id: p.id, code: p.code, name: p.name, price_per_liter: p.price_per_liter })));
             setTanks(tanksData.map(t => ({ id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name ?? undefined, tank_type: t.tank_type ?? undefined, capacity_liters: t.capacity_liters })));
             setNozzles(nozzlesData.map(n => ({
-                nozzle_id: n.nozzle_id,
+                id: n.id,
+                nozzle_code: n.nozzle_code,
                 nozzle_name: n.nozzle_name || 'Unnamed',
                 tank_id: n.tank_id,
                 pump_id: n.pump_id,
@@ -300,7 +359,8 @@ export default function AdminPage() {
                 pump_name: n.pump_name ?? undefined,
                 product_name: n.product_name ?? undefined,
                 is_active: n.is_active,
-            } as any))); // Cast to any or Nozzle to avoid strict type mismatch during refactor if definitions lag
+            } as any)));
+            setPumps(pumpsData);
         } catch (err) {
             console.error('Failed to refresh config data:', err);
         } finally {
@@ -321,14 +381,14 @@ export default function AdminPage() {
                     code: newProduct.code,
                     name: newProduct.name,
                     price_per_liter: parseFloat(newProduct.price_per_liter),
-                });
+                }, selectedStationId);
                 setEditingProduct(null);
             } else {
                 await api.inventory.createProduct({
                     code: newProduct.code,
                     name: newProduct.name,
                     price_per_liter: parseFloat(newProduct.price_per_liter),
-                });
+                }, selectedStationId);
             }
             await refreshConfigData();
             setNewProduct({ code: '', name: '', price_per_liter: '' });
@@ -353,18 +413,18 @@ export default function AdminPage() {
                     name: newTank.name,
                     product_id: newTank.product_id,
                     tank_type: newTank.tank_type || undefined,
-                    capacity_liters: parseInt(newTank.capacity_liters),
+                    capacity_liters: parseFloat(newTank.capacity_liters),
                     color: newTank.color || undefined,
-                });
+                }, selectedStationId);
                 setEditingTank(null);
             } else {
                 await api.inventory.createTank({
                     name: newTank.name,
                     product_id: newTank.product_id,
                     tank_type: newTank.tank_type || undefined,
-                    capacity_liters: parseInt(newTank.capacity_liters),
+                    capacity_liters: parseFloat(newTank.capacity_liters),
                     color: newTank.color || undefined,
-                });
+                }, selectedStationId);
             }
             await refreshConfigData();
             setNewTank({ name: '', product_id: '', tank_type: '', capacity_liters: '', color: '' });
@@ -378,8 +438,8 @@ export default function AdminPage() {
 
     // Add Nozzle Handler
     const handleAddNozzle = async () => {
-        if (!newNozzle.nozzle_name || !newNozzle.tank_id || !newNozzle.product_id) {
-            alert('Name, Tank, and Product are required');
+        if (!newNozzle.nozzle_name || !newNozzle.tank_id || !newNozzle.product_id || !newNozzle.pump_id) {
+            alert('Name, Tank, Product, and Pump are required');
             return;
         }
 
@@ -387,27 +447,51 @@ export default function AdminPage() {
         try {
             if (editingNozzle) {
                 await api.inventory.updateNozzle(editingNozzle, {
-                    nozzle_id: newNozzle.nozzle_id || editingNozzle, // Include the nozzle_id
+                    nozzle_code: newNozzle.nozzle_id, // Map frontend 'nozzle_id' to backend 'nozzle_code'
                     nozzle_name: newNozzle.nozzle_name,
                     tank_id: newNozzle.tank_id,
                     product_id: newNozzle.product_id,
-                    pump_id: newNozzle.pump_id || undefined,
-                });
+                    pump_id: newNozzle.pump_id,
+                } as any, selectedStationId);
                 setEditingNozzle(null);
             } else {
                 await api.inventory.createNozzle({
-                    nozzle_id: newNozzle.nozzle_id || `N-${newNozzle.nozzle_name}`, // Use provided ID or generate logic
+                    nozzle_code: newNozzle.nozzle_id || `N-${newNozzle.nozzle_name}`,
                     nozzle_name: newNozzle.nozzle_name,
                     tank_id: newNozzle.tank_id,
                     product_id: newNozzle.product_id,
-                    pump_id: newNozzle.pump_id || undefined,
-                });
+                    pump_id: newNozzle.pump_id,
+                } as any, selectedStationId);
             }
             await refreshConfigData();
             setNewNozzle({ nozzle_id: '', nozzle_name: '', tank_id: '', product_id: '', pump_id: '' });
             setShowAddNozzle(false);
         } catch (err: any) {
             alert(`Failed to save nozzle: ${err.message || err.detail}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Add Pump Handler
+    const handleAddPump = async () => {
+        if (!newPump.name) {
+            alert('Pump Name is required');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            if (editingPump) {
+                await api.inventory.updatePump(editingPump, newPump, selectedStationId);
+                setEditingPump(null);
+            } else {
+                await api.inventory.createPump(newPump, selectedStationId);
+            }
+            await refreshConfigData();
+            setNewPump({ name: '', location: '' });
+            setShowAddPump(false);
+        } catch (err: any) {
+            alert(`Failed to save pump: ${err.message || err.detail}`);
         } finally {
             setIsSaving(false);
         }
@@ -434,14 +518,20 @@ export default function AdminPage() {
 
     const handleEditNozzle = (n: any) => {
         setNewNozzle({
-            nozzle_id: n.nozzle_id || '', // Populate if available
+            nozzle_id: n.nozzle_code || '', // Populate code
             nozzle_name: n.nozzle_name,
             tank_id: n.tank_id,
             product_id: n.product_id,
-            pump_id: n.pump_name || ''
+            pump_id: n.pump_id
         });
-        setEditingNozzle(n.nozzle_id);
+        setEditingNozzle(n.id); // Use UUID for editing reference
         setShowAddNozzle(true);
+    };
+
+    const handleEditPump = (p: any) => {
+        setNewPump({ name: p.name, location: p.location || '' });
+        setEditingPump(p.id);
+        setShowAddPump(true);
     };
 
     // Delete handlers
@@ -454,9 +544,69 @@ export default function AdminPage() {
     };
 
     const handleDeleteNozzle = (nozzleId: string, nozzleName: string) => {
-        console.log('Delete clicked for nozzle:', nozzleId);
         setDeleteConfirm({ type: 'nozzle', id: nozzleId, name: nozzleName });
     };
+
+    const handleDeletePump = (pumpId: string, pumpName: string) => {
+        setDeleteConfirm({ type: 'pump', id: pumpId, name: pumpName });
+    };
+
+    // User Management Handlers
+    const handleInviteUser = async () => {
+        if (!newUser.email || !newUser.full_name) {
+            alert('Email and Full Name are required');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            await api.users.invite({
+                email: newUser.email,
+                full_name: newUser.full_name,
+                role: newUser.role,
+                station_id: selectedStationId,
+            });
+            await refreshConfigData();
+            setNewUser({ email: '', full_name: '', role: 'supervisor' });
+            setShowAddUser(false);
+            alert('User invited successfully');
+        } catch (err: any) {
+            alert(`Failed to invite user: ${err.message || err.detail}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteUser = (userId: string, userName: string) => {
+        setDeleteConfirm({ type: 'user' as any, id: userId, name: userName });
+    };
+
+    const handleResetPasswordShow = (userId: string, userName: string) => {
+        setPasswordResetUser({ id: userId, name: userName });
+        setNewPassword('');
+    };
+
+    const handleResetPasswordSubmit = async () => {
+        if (!passwordResetUser || !newPassword) {
+            alert('Password is required');
+            return;
+        }
+        if (newPassword.length < 8) {
+            alert('Password must be at least 8 characters');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            await api.users.updatePassword(passwordResetUser.id, newPassword);
+            setPasswordResetUser(null);
+            setNewPassword('');
+            alert('Password reset successfully');
+        } catch (err: any) {
+            alert(`Failed to reset password: ${err.message || err.detail}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
 
     const executeDelete = async () => {
         const { type, id } = deleteConfirm;
@@ -465,12 +615,16 @@ export default function AdminPage() {
         try {
             if (type === 'nozzle') {
                 console.log('Calling API to delete nozzle...');
-                await api.inventory.deleteNozzle(id);
+                await api.inventory.deleteNozzle(id, selectedStationId);
                 console.log('Delete successful, refreshing data...');
             } else if (type === 'tank') {
-                await api.inventory.deleteTank(id);
+                await api.inventory.deleteTank(id, selectedStationId);
             } else if (type === 'product') {
-                await api.inventory.deleteProduct(id);
+                await api.inventory.deleteProduct(id, selectedStationId);
+            } else if (type === 'pump') {
+                await api.inventory.deletePump(id, selectedStationId);
+            } else if (type === 'user') {
+                await api.users.remove(id);
             }
             await refreshConfigData();
         } catch (err: any) {
@@ -597,7 +751,7 @@ export default function AdminPage() {
                             >
                                 Station Details
                             </button>
-                            {(['products', 'tanks', 'nozzles'] as const).map((tab) => (
+                            {(['products', 'tanks', 'nozzles', 'pumps'] as const).map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => setConfigTab(tab)}
@@ -606,9 +760,18 @@ export default function AdminPage() {
                                         : 'border-transparent text-slate-500 hover:text-slate-700'
                                         }`}
                                 >
-                                    {tab} ({tab === 'products' ? products.length : tab === 'tanks' ? tanks.length : nozzles.length})
+                                    {tab} ({tab === 'products' ? products.length : tab === 'tanks' ? tanks.length : tab === 'nozzles' ? nozzles.length : pumps.length})
                                 </button>
                             ))}
+                            <button
+                                onClick={() => setConfigTab('users')}
+                                className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px transition-colors ${configTab === 'users'
+                                    ? 'border-indigo-600 text-indigo-600'
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                    }`}
+                            >
+                                Users ({stationUsers.length})
+                            </button>
                         </div>
 
                         {/* Station Details Tab */}
@@ -1155,13 +1318,16 @@ export default function AdminPage() {
                                                     </div>
                                                 )}
                                             </div>
-                                            <input
-                                                type="text"
-                                                placeholder="Pump ID (optional, e.g., P-LAD-1)"
+                                            <select
                                                 className="px-3 py-2 border rounded-md text-sm"
                                                 value={newNozzle.pump_id}
                                                 onChange={(e) => setNewNozzle(n => ({ ...n, pump_id: e.target.value }))}
-                                            />
+                                            >
+                                                <option value="">Select Pump</option>
+                                                {pumps.map((p) => (
+                                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                                ))}
+                                            </select>
                                         </div>
 
                                         <div className="flex justify-end gap-2">
@@ -1190,37 +1356,253 @@ export default function AdminPage() {
                                 <table className="w-full text-sm">
                                     <thead className="bg-slate-50">
                                         <tr>
-                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Nozzle ID</th>
+                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Nozzle Code</th>
                                             <th className="px-4 py-2 text-left font-medium text-slate-600">Nozzle Name</th>
                                             <th className="px-4 py-2 text-left font-medium text-slate-600">Tank</th>
                                             <th className="px-4 py-2 text-left font-medium text-slate-600">Product</th>
-                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Pump ID</th>
+                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Pump</th>
                                             <th className="px-4 py-2 text-center font-medium text-slate-600">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y">
                                         {nozzles.map((n) => (
-                                            <tr key={n.nozzle_id}>
-                                                <td className="px-4 py-3">{n.nozzle_id}</td>
+                                            <tr key={n.id}>
+                                                <td className="px-4 py-3">{n.nozzle_code}</td>
                                                 <td className="px-4 py-3">{n.nozzle_name}</td>
                                                 <td className="px-4 py-3">{tanks.find(t => t.id === n.tank_id)?.name || '-'}</td>
                                                 <td className="px-4 py-3">{n.product_name || '-'}</td>
                                                 <td className="px-4 py-3">{n.pump_name || '-'}</td>
                                                 <td className="px-4 py-3 text-center flex items-center justify-center gap-2">
                                                     <button onClick={() => handleEditNozzle(n)} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Edit</button>
-                                                    <button onClick={() => handleDeleteNozzle(n.nozzle_id, n.nozzle_name || n.nozzle_id)} className="text-red-600 hover:text-red-800 text-sm font-medium">Delete</button>
+                                                    <button onClick={() => handleDeleteNozzle(n.id, n.nozzle_name)} className="text-red-600 hover:text-red-800 text-sm font-medium">Delete</button>
                                                 </td>
                                             </tr>
                                         ))}
                                         {nozzles.length === 0 && (
                                             <tr>
-                                                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">No nozzles configured. Add nozzles here to see them in the Sales page.</td>
+                                                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">No nozzles configured. Add nozzles here.</td>
                                             </tr>
                                         )}
                                     </tbody>
                                 </table>
                             </div>
                         )}
+
+                        {/* Pumps Tab */}
+                        {configTab === 'pumps' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-sm text-slate-500">Pumps at this station</p>
+                                    <button
+                                        onClick={() => setShowAddPump(!showAddPump)}
+                                        className="px-3 py-1.5 text-sm font-medium rounded-md bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                                    >
+                                        {showAddPump ? 'Cancel' : '+ Add Pump'}
+                                    </button>
+                                </div>
+                                {showAddPump && (
+                                    <div className="bg-slate-50 rounded-lg p-4 mb-4 space-y-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input
+                                                type="text"
+                                                placeholder="Pump Name"
+                                                className="px-3 py-2 border rounded-md text-sm"
+                                                value={newPump.name}
+                                                onChange={(e) => setNewPump(p => ({ ...p, name: e.target.value }))}
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Location / Island (optional)"
+                                                className="px-3 py-2 border rounded-md text-sm"
+                                                value={newPump.location}
+                                                onChange={(e) => setNewPump(p => ({ ...p, location: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                            {editingPump && (
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingPump(null);
+                                                        setNewPump({ name: '', location: '' });
+                                                        setShowAddPump(false);
+                                                    }}
+                                                    className="px-4 py-2 text-sm font-medium rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={handleAddPump}
+                                                disabled={isSaving}
+                                                className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                                            >
+                                                {isSaving ? 'Saving...' : (editingPump ? 'Update Pump' : 'Save Pump')}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                <table className="w-full text-sm">
+                                    <thead className="bg-slate-50">
+                                        <tr>
+                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Name</th>
+                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Location</th>
+                                            <th className="px-4 py-2 text-center font-medium text-slate-600">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {pumps.map((p) => (
+                                            <tr key={p.id}>
+                                                <td className="px-4 py-3 font-medium">{p.name}</td>
+                                                <td className="px-4 py-3 text-slate-500">{p.location || '-'}</td>
+                                                <td className="px-4 py-3 text-center flex items-center justify-center gap-2">
+                                                    <button onClick={() => handleEditPump(p)} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Edit</button>
+                                                    <button onClick={() => handleDeletePump(p.id, p.name)} className="text-red-600 hover:text-red-800 text-sm font-medium">Delete</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {pumps.length === 0 && (
+                                            <tr>
+                                                <td colSpan={3} className="px-4 py-8 text-center text-slate-400">No pumps configured</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* Users Tab */}
+                        {configTab === 'users' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-sm text-slate-500">Manage users with access to this station</p>
+                                    <button
+                                        onClick={() => setShowAddUser(!showAddUser)}
+                                        className="px-3 py-1.5 text-sm font-medium rounded-md bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                                    >
+                                        {showAddUser ? 'Cancel' : '+ Invite User'}
+                                    </button>
+                                </div>
+                                {showAddUser && (
+                                    <div className="bg-slate-50 rounded-lg p-4 mb-4 space-y-3">
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <input
+                                                type="email"
+                                                placeholder="Email"
+                                                className="px-3 py-2 border rounded-md text-sm"
+                                                value={newUser.email}
+                                                onChange={(e) => setNewUser(u => ({ ...u, email: e.target.value }))}
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Full Name"
+                                                className="px-3 py-2 border rounded-md text-sm"
+                                                value={newUser.full_name}
+                                                onChange={(e) => setNewUser(u => ({ ...u, full_name: e.target.value }))}
+                                            />
+                                            <select
+                                                className="px-3 py-2 border rounded-md text-sm"
+                                                value={newUser.role}
+                                                onChange={(e) => setNewUser(u => ({ ...u, role: e.target.value as any }))}
+                                            >
+                                                <option value="supervisor">Supervisor</option>
+                                                <option value="accountant">Accountant</option>
+                                                <option value="manager">Manager</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                            <button
+                                                onClick={handleInviteUser}
+                                                disabled={isSaving}
+                                                className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                                            >
+                                                {isSaving ? 'Inviting...' : 'Send Invite'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                <table className="w-full text-sm">
+                                    <thead className="bg-slate-50">
+                                        <tr>
+                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Email</th>
+                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Full Name</th>
+                                            <th className="px-4 py-2 text-left font-medium text-slate-600">Role</th>
+                                            <th className="px-4 py-2 text-center font-medium text-slate-600">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {stationUsers.map((user) => (
+                                            <tr key={user.id}>
+                                                <td className="px-4 py-3 font-medium">{user.email}</td>
+                                                <td className="px-4 py-3">{user.full_name || '-'}</td>
+                                                <td className="px-4 py-3 capitalize">{user.role}</td>
+                                                <td className="px-4 py-3 text-center flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => handleResetPasswordShow(user.id, user.full_name || user.email)}
+                                                        className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                                                    >
+                                                        Reset Password
+                                                    </button>
+                                                    {user.role !== 'owner' && (
+                                                        <button
+                                                            onClick={() => handleDeleteUser(user.id, user.full_name || user.email)}
+                                                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {stationUsers.length === 0 && (
+                                            <tr>
+                                                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">No users assigned to this station</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Password Reset Modal */}
+                {passwordResetUser && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                            <h3 className="text-lg font-semibold text-slate-900 mb-4">
+                                Reset Password for {passwordResetUser.name}
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
+                                    <input
+                                        type="password"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        placeholder="Enter new password (min 8 characters)"
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setPasswordResetUser(null);
+                                            setNewPassword('');
+                                        }}
+                                        className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleResetPasswordSubmit}
+                                        disabled={isSaving}
+                                        className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        {isSaving ? 'Resetting...' : 'Reset Password'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -1247,79 +1629,81 @@ export default function AdminPage() {
                     <StationList stations={stations} onManageStation={handleSelectStation} />
                 </section>
 
-            </main>
+            </main >
 
             {/* Onboard Station Modal */}
-            {showOnboardModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
-                        <div className="bg-indigo-600 px-6 py-4">
-                            <h3 className="text-lg font-semibold text-white">Onboard New Station</h3>
-                            <p className="text-sm text-indigo-200">Create a new station and send owner invite</p>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Station Name *</label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g., Central Fuel Station"
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                    value={newStation.name}
-                                    onChange={(e) => setNewStation(s => ({ ...s, name: e.target.value }))}
-                                />
+            {
+                showOnboardModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+                            <div className="bg-indigo-600 px-6 py-4">
+                                <h3 className="text-lg font-semibold text-white">Onboard New Station</h3>
+                                <p className="text-sm text-indigo-200">Create a new station and send owner invite</p>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Owner Email *</label>
-                                <input
-                                    type="email"
-                                    placeholder="owner@example.com"
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                    value={newStation.owner_email}
-                                    onChange={(e) => setNewStation(s => ({ ...s, owner_email: e.target.value }))}
-                                />
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Station Name *</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., Central Fuel Station"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                        value={newStation.name}
+                                        onChange={(e) => setNewStation(s => ({ ...s, name: e.target.value }))}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Owner Email *</label>
+                                    <input
+                                        type="email"
+                                        placeholder="owner@example.com"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                        value={newStation.owner_email}
+                                        onChange={(e) => setNewStation(s => ({ ...s, owner_email: e.target.value }))}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Street address"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                        value={newStation.address}
+                                        onChange={(e) => setNewStation(s => ({ ...s, address: e.target.value }))}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                                    <input
+                                        type="tel"
+                                        placeholder="+94 XX XXX XXXX"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                        value={newStation.phone}
+                                        onChange={(e) => setNewStation(s => ({ ...s, phone: e.target.value }))}
+                                    />
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                                <input
-                                    type="text"
-                                    placeholder="Street address"
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                    value={newStation.address}
-                                    onChange={(e) => setNewStation(s => ({ ...s, address: e.target.value }))}
-                                />
+                            <div className="bg-slate-50 px-6 py-4 flex justify-end gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowOnboardModal(false);
+                                        setNewStation({ name: '', owner_email: '', address: '', phone: '' });
+                                    }}
+                                    className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleOnboardStation}
+                                    disabled={isOnboarding}
+                                    className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isOnboarding ? 'Creating...' : 'Create Station'}
+                                </button>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                                <input
-                                    type="tel"
-                                    placeholder="+94 XX XXX XXXX"
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                    value={newStation.phone}
-                                    onChange={(e) => setNewStation(s => ({ ...s, phone: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        <div className="bg-slate-50 px-6 py-4 flex justify-end gap-3">
-                            <button
-                                onClick={() => {
-                                    setShowOnboardModal(false);
-                                    setNewStation({ name: '', owner_email: '', address: '', phone: '' });
-                                }}
-                                className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleOnboardStation}
-                                disabled={isOnboarding}
-                                className="px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isOnboarding ? 'Creating...' : 'Create Station'}
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Delete Confirmation Dialog */}
             <ConfirmDialog
@@ -1332,6 +1716,6 @@ export default function AdminPage() {
                 onConfirm={executeDelete}
                 onCancel={() => setDeleteConfirm({ type: null, id: '', name: '' })}
             />
-        </div>
+        </div >
     );
 }
