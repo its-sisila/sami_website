@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.database import engine, Base
 # Ensure models are imported so they are registered with Base
 from app.modules.accounts.models import BankAccount
+from app.modules.pricing.models import DailyMOPSPrice, MonthlyMOPSAverage, ExchangeRate
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -101,6 +102,7 @@ from app.modules.settlements import router as settlements_router
 from app.modules.users import router as users_router
 from app.modules.exports import router as exports_router
 from app.modules.expenses import router as expenses_router
+from app.modules.pricing.routes import router as pricing_router
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(employees_router, prefix="/employees", tags=["employees"])
@@ -114,6 +116,7 @@ app.include_router(settlements_router, prefix="/settlements", tags=["settlements
 app.include_router(users_router, prefix="/users", tags=["users"])
 app.include_router(exports_router, prefix="/exports", tags=["exports"])
 app.include_router(expenses_router, prefix="/expenses", tags=["expenses"])
+app.include_router(pricing_router)  # Already has /pricing prefix in routes.py
 
 
 if __name__ == "__main__":
