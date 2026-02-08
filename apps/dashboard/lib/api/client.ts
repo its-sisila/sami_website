@@ -1300,6 +1300,35 @@ export const health = {
 };
 
 // ============================================================================
+// Pricing Endpoints (MOPS Data)
+// ============================================================================
+
+export const pricing = {
+    /**
+     * Get latest 30-day MOPS averages and exchange rate
+     */
+    getLatest: () => request<{
+        mogas_92_average: number | null;
+        gasoil_average: number | null;
+        exchange_rate: number | null;
+        last_updated: string | null;
+        period_days: number;
+        data_source: string;
+    }>('/pricing/latest'),
+
+    /**
+     * Manually refresh pricing data (admin only)
+     */
+    refresh: () => request<{
+        message: string;
+        mogas_records: number;
+        gasoil_records: number;
+        mogas_average: number;
+        gasoil_average: number;
+    }>('/pricing/refresh', { method: 'POST' }),
+};
+
+// ============================================================================
 // Export all API modules
 // ============================================================================
 
@@ -1318,6 +1347,7 @@ export const api = {
     auth,
     stations,
     health,
+    pricing,
 };
 
 export default api;

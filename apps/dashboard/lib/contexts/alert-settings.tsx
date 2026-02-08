@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import useSWR from 'swr';
 import { api } from '@/lib/api/client';
 import type { StationSettings as ApiStationSettings } from '@/lib/api/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Default threshold values
 const DEFAULT_LATE_THRESHOLD_MINUTES = 10;
@@ -36,9 +37,12 @@ const fetchSettings = async (): Promise<ApiStationSettings> => {
 };
 
 export function AlertSettingsProvider({ children }: { children: ReactNode }) {
+    const { user, isLoading: authLoading } = useAuth();
+    const shouldFetch = user && !authLoading;
+
     // Use SWR to fetch settings from API
     const { data: apiSettings, error, mutate, isLoading } = useSWR<ApiStationSettings>(
-        '/stations/settings',
+        shouldFetch ? '/stations/settings' : null,
         fetchSettings,
         {
             revalidateOnFocus: false,
