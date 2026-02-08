@@ -22,6 +22,7 @@ import {
     Settings,
     Menu,
     X,
+    Calculator,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrentUser } from "@/lib/hooks";
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
     // { name: "Deposits", href: "/deposits", icon: Landmark },
     { name: "Accounts", href: "/accounts", icon: ChartColumnIncreasing },
     { name: "Staff", href: "/staff", icon: UserCog },
+    { name: "Price Formula", href: "/pricing", icon: Calculator },
     { name: "Settings", href: "/settings", icon: Settings },
     { name: "Admin Panel", href: "/admin", icon: Shield, requiresRole: 'system_admin' },
 ];
