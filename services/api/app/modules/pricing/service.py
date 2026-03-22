@@ -19,6 +19,7 @@ from app.modules.pricing.scrapers.investing_scraper import (
     calculate_average_price
 )
 from app.modules.pricing.scrapers.exchange_scraper import scrape_exchange_rate
+from app.modules.pricing.scrapers.barchart_scraper import scrape_barchart_price
 from app.modules.pricing.schemas import PricingDataResponse
 
 logger = logging.getLogger(__name__)
@@ -30,13 +31,33 @@ async def fetch_and_save_daily_prices(
     days: int = 30
 ) -> int:
     """
-    Scrape historical prices from Investing.com and save to database
+    Scrape prices and save to database.
+    Uses Barchart for Mogas 92 (current day) and Investing.com for others (history).
     
     Returns:
         Number of records saved
     """
     try:
-        prices = scrape_investing_historical_prices(product.value, days=days)
+        prices = []
+        
+        if product == ProductType.MOGAS_92:
+            # Use Barchart for Mogas 92
+            try:
+                current_price = scrape_barchart_price()
+                prices = [{
+                    'date': datetime.now(),
+                    'price': current_price
+                }]
+                logger.info(f"Fetched Mogas 92 price from Barchart: {current_price}")
+            except Exception as e:
+                logger.error(f"Barchart scraping failed: {e}")
+                # Optional: Fallback to Investing.com if Barchart fails? 
+                # For now, let's just log error and maybe try investing as backup
+                prices = scrape_investing_historical_prices(product.value, days=days)
+        
+        else:
+            # Use Investing.com for Gasoil (and others)
+            prices = scrape_investing_historical_prices(product.value, days=days)
         
         saved_count = 0
         for price_data in prices:
@@ -53,13 +74,17 @@ async def fetch_and_save_daily_prices(
             if existing:
                 # Update existing record
                 existing.price_usd_per_barrel = price_data['price']
+                # existing.source = "barchart.com" if product == ProductType.MOGAS_92 else "investing.com" 
+                # (Ideally update source too, but model default is set. logic below handles new records)
+                if product == ProductType.MOGAS_92:
+                     existing.source = "barchart.com"
             else:
                 # Create new record
                 new_record = DailyMOPSPrice(
                     date=price_data['date'].date(),
                     product_type=product,
                     price_usd_per_barrel=price_data['price'],
-                    source="investing.com"
+                    source="barchart.com" if product == ProductType.MOGAS_92 else "investing.com"
                 )
                 db.add(new_record)
             
