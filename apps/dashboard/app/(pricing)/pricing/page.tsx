@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw } from "lucide-react";
+import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -13,6 +13,53 @@ import {
     type PricingBreakdown,
 } from "@/lib/pricing-formula";
 import { usePricingData } from "@/lib/hooks/use-pricing-data";
+import api from "@/lib/api/client";
+
+const AI_DEFAULT_PROMPT =
+    "Based on current global MOPS and LKR rates, what is your inventory recommendation for Petrol 92 and Diesel for the upcoming week?";
+
+/**
+ * Determine the alert style based on advice content.
+ * - "stock up" / "surge" → amber/warning
+ * - "run down"           → blue/calm
+ * - fallback             → neutral slate
+ */
+function getAdviceSentiment(advice: string): "warning" | "calm" | "neutral" {
+    const lower = advice.toLowerCase();
+    if (lower.includes("stock up") || lower.includes("surge")) return "warning";
+    if (lower.includes("run down")) return "calm";
+    return "neutral";
+}
+
+const SENTIMENT_STYLES = {
+    warning: {
+        border: "border-amber-500/40",
+        bg: "bg-gradient-to-br from-amber-950/60 via-amber-900/30 to-slate-900/80",
+        glow: "shadow-amber-500/10",
+        icon: <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />,
+        badge: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+        badgeText: "Action Required",
+        accentBar: "bg-amber-500",
+    },
+    calm: {
+        border: "border-sky-500/40",
+        bg: "bg-gradient-to-br from-sky-950/60 via-sky-900/30 to-slate-900/80",
+        glow: "shadow-sky-500/10",
+        icon: <TrendingDown className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />,
+        badge: "bg-sky-500/20 text-sky-300 border-sky-500/30",
+        badgeText: "Market Declining",
+        accentBar: "bg-sky-500",
+    },
+    neutral: {
+        border: "border-slate-600/40",
+        bg: "bg-gradient-to-br from-slate-800/60 via-slate-900/30 to-slate-900/80",
+        glow: "shadow-slate-500/5",
+        icon: <Sparkles className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />,
+        badge: "bg-red-500/20 text-red-300 border-red-500/30",
+        badgeText: "Market Stable",
+        accentBar: "bg-red-500",
+    },
+} as const;
 
 export default function PricingPage() {
     const { pricingData, isLoading: loadingPricing, error: pricingError } = usePricingData();
@@ -34,6 +81,24 @@ export default function PricingPage() {
 
     const [breakdown, setBreakdown] = useState<PricingBreakdown | null>(null);
 
+    // ----- AI Analyst state -----
+    const [analystAdvice, setAnalystAdvice] = useState<string | null>(null);
+    const [analystLoading, setAnalystLoading] = useState(false);
+
+    const handleAskAnalyst = async () => {
+        setAnalystLoading(true);
+        setAnalystAdvice(null);
+        try {
+            const { advice } = await api.pricing.askAnalyst(AI_DEFAULT_PROMPT);
+            setAnalystAdvice(advice);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to get AI advice";
+            toast.error(message);
+        } finally {
+            setAnalystLoading(false);
+        }
+    };
+
     const handleCalculate = () => {
         const result = calculateFuelPrice({
             ...inputs,
@@ -48,10 +113,27 @@ export default function PricingPage() {
     };
 
     const handleInputChange = (field: keyof PricingInputs, value: string | FuelType) => {
-        setInputs((prev) => ({
-            ...prev,
-            [field]: typeof value === "string" && field !== "fuelType" ? parseFloat(value) || 0 : value,
-        }));
+        setInputs((prev) => {
+            const updates: Partial<PricingInputs> = {
+                [field]: typeof value === "string" && field !== "fuelType" ? parseFloat(value) || 0 : value,
+            };
+
+            // Auto-switch MOPS price if the user changes Fuel Type and the current price matches the previous live data
+            if (field === "fuelType" && pricingData) {
+                const newFuel = value as FuelType;
+
+                if (prev.fuelType === "diesel" && newFuel === "petrol_92" && prev.mopsPrice === pricingData.gasoil_average) {
+                    updates.mopsPrice = pricingData.mogas_92_average || prev.mopsPrice;
+                } else if (prev.fuelType === "petrol_92" && newFuel === "diesel" && prev.mopsPrice === pricingData.mogas_92_average) {
+                    updates.mopsPrice = pricingData.gasoil_average || prev.mopsPrice;
+                }
+            }
+
+            return {
+                ...prev,
+                ...updates,
+            };
+        });
     };
 
     const handleUseLiveData = () => {
@@ -80,6 +162,10 @@ export default function PricingPage() {
         toast.success("Live market data applied");
     };
 
+    // Compute sentiment styling once
+    const sentiment = analystAdvice ? getAdviceSentiment(analystAdvice) : null;
+    const styles = sentiment ? SENTIMENT_STYLES[sentiment] : null;
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
             <div className="max-w-7xl mx-auto">
@@ -95,6 +181,101 @@ export default function PricingPage() {
                         Calculate fuel prices based on the 2025 Sri Lankan Formula (MOPS-based)
                     </p>
                 </div>
+
+                {/* ── AI Market Analyst Section ── */}
+                <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
+                    {/* Top accent bar */}
+                    <div className="h-1 bg-gradient-to-r from-red-600 via-red-500 to-amber-500" />
+
+                    <div className="p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="relative">
+                                    <div className="bg-gradient-to-br from-red-600 to-red-600 p-2.5 rounded-xl shadow-lg shadow-purple-500/20">
+                                        <Sparkles className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-slate-900 animate-pulse" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-semibold text-white tracking-tight">
+                                        SAMI AI Analyst Advice
+                                    </h2>
+                                    <p className="text-xs text-slate-500">
+                                        Powered by Gemini &bull; Real-time MOPS & LKR analysis
+                                    </p>
+                                </div>
+                            </div>
+
+                            <Button
+                                onClick={handleAskAnalyst}
+                                disabled={analystLoading}
+                                className="bg-gradient-to-r from-red-600 to-re-600 hover:from-red-500 hover:to-red-500 text-white font-medium px-5 py-2.5 rounded-lg shadow-lg shadow-red-500/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {analystLoading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Analysing…
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="w-4 h-4 mr-2" />
+                                        Get AI Market Advice
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+
+                        {/* Loading shimmer */}
+                        {analystLoading && (
+                            <div className="space-y-3 animate-pulse">
+                                <div className="h-4 bg-slate-700/60 rounded-full w-3/4" />
+                                <div className="h-4 bg-slate-700/40 rounded-full w-1/2" />
+                                <div className="h-4 bg-slate-700/30 rounded-full w-2/3" />
+                            </div>
+                        )}
+
+                        {/* Advice display */}
+                        {analystAdvice && styles && (
+                            <div
+                                className={`
+                                    relative rounded-xl border ${styles.border} ${styles.bg}
+                                    shadow-lg ${styles.glow}
+                                    transition-all duration-500 ease-out
+                                `}
+                            >
+                                {/* Thin left accent bar */}
+                                <div className={`absolute left-0 top-4 bottom-4 w-1 rounded-full ${styles.accentBar}`} />
+
+                                <div className="pl-6 pr-5 py-5">
+                                    <div className="flex items-start gap-3">
+                                        {styles.icon}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span
+                                                    className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border ${styles.badge}`}
+                                                >
+                                                    {styles.badgeText}
+                                                </span>
+                                            </div>
+                                            <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">
+                                                {analystAdvice}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Empty-state hint */}
+                        {!analystAdvice && !analystLoading && (
+                            <div className="flex items-center gap-2 text-xs text-slate-600">
+                                <Sparkles className="w-3 h-3" />
+                                Click the button above to get live AI-powered market advice
+                            </div>
+                        )}
+                    </div>
+                </div>
+                {/* ── End AI Market Analyst Section ── */}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Input Panel */}
