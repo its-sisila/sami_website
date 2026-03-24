@@ -35,6 +35,7 @@ export interface PricingBreakdown {
     v1_landedCost: number;
     v2_processingCost: number;
     v3_adminCost: number;
+    financeSurcharge: number;    // Debt recovery + LC interest
     v4_taxation: number;
 
     // Final MRP
@@ -58,13 +59,19 @@ const PROCESSING_COSTS: Record<FuelType, number> = {
 // V3 Admin Cost Rate
 const ADMIN_COST_RATE = 0.02; // 2% of V1
 
+// Short-term operational finance cost (LKR per litre)
+// Covers bank/LC charges on new shipments.
+// The historic Rs.50 debt recovery is already baked into the statutory Excise Duty.
+// ⚠ This figure fluctuates with central government policy updates.
+const SHORT_TERM_FINANCE_COST = 2.50;
+
 // V4 Taxation Configuration (LKR/L)
 // ⚠️ CONFIDENTIAL: Fill these values from your private source (gazette/official rates)
 // These are placeholder values - update them based on actual tax rates
 const TAX_RATES = {
     diesel: {
-        customsDuty: 18,      // LKR/L - Customs Import Duty (CID)
-        exciseDuty: 0,       // LKR/L - Excise Duty
+        customsDuty: 6,       // LKR/L - Customs Import Duty (CID)
+        exciseDuty: 44,      // LKR/L - Excise Duty (contains historic debt recovery)
         palLevy: 0,          // LKR/L - Ports & Airports Development Levy
         ssclRate: 1.25,      // % - Social Security Contribution Levy (fixed at 1.25%)
     },
@@ -102,6 +109,9 @@ export function calculateFuelPrice(inputs: PricingInputs): PricingBreakdown {
     // 2% of V1
     const v3_adminCost = v1_landedCost * ADMIN_COST_RATE;
 
+    // Step 3b: Short-term finance cost (bank/LC charges)
+    const financeSurcharge = SHORT_TERM_FINANCE_COST;
+
     // Step 4: Calculate V4 (Taxation)
     // Use tax overrides if provided (and non-zero), otherwise use TAX_RATES
     const defaultTaxRates = TAX_RATES[fuelType];
@@ -116,6 +126,7 @@ export function calculateFuelPrice(inputs: PricingInputs): PricingBreakdown {
     const baseTaxes = taxRates.customsDuty + taxRates.exciseDuty + taxRates.palLevy;
 
     // SSCL is calculated as a percentage of (V1 + V2 + V3 + Base Taxes)
+    // Finance surcharge is excluded — it's Treasury-imposed, not subject to SSCL
     const baseForSSCL = v1_landedCost + v2_processingCost + v3_adminCost + baseTaxes;
     const ssclAmount = baseForSSCL * (taxRates.ssclRate / 100);
 
@@ -123,12 +134,13 @@ export function calculateFuelPrice(inputs: PricingInputs): PricingBreakdown {
     const v4_taxation = baseTaxes + ssclAmount;
 
     // Step 5: Calculate MRP
-    const mrp = v1_landedCost + v2_processingCost + v3_adminCost + v4_taxation;
+    const mrp = v1_landedCost + v2_processingCost + v3_adminCost + financeSurcharge + v4_taxation;
 
     return {
         v1_landedCost,
         v2_processingCost,
         v3_adminCost,
+        financeSurcharge,
         v4_taxation,
         mrp,
         v1_usd_per_liter,
