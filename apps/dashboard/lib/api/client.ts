@@ -1326,6 +1326,14 @@ export const pricing = {
         mogas_average: number;
         gasoil_average: number;
     }>('/pricing/refresh', { method: 'POST' }),
+
+    /**
+     * Ask the AI Market Analyst for stocking advice
+     */
+    askAnalyst: (question: string) => request<{ advice: string }>('/pricing/ask-analyst', {
+        method: 'POST',
+        body: JSON.stringify({ question }),
+    }),
 };
 
 // ============================================================================
