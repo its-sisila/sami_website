@@ -16,7 +16,43 @@ from jose import jwt
 
 from app.main import app
 from app.core.config import settings
+from app.core.database import Base, engine
 from app.modules.auth.models import UserRole
+
+# Import ALL model modules so they register with Base.metadata
+import app.modules.auth.models          # noqa: F401
+import app.modules.accounts.models      # noqa: F401
+import app.modules.employees.models     # noqa: F401
+import app.modules.inventory.models     # noqa: F401
+import app.modules.sales.models         # noqa: F401
+import app.modules.orders.models        # noqa: F401
+import app.modules.settlements.models   # noqa: F401
+import app.modules.stations.models      # noqa: F401
+import app.modules.admin.models         # noqa: F401
+import app.modules.expenses.models      # noqa: F401
+import app.modules.pricing.models       # noqa: F401
+
+
+# ============================================================================
+# Database Schema Setup (session-scoped)
+# ============================================================================
+
+@pytest.fixture(scope="session", autouse=True)
+def event_loop():
+    """Create event loop for the entire test session."""
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def setup_database():
+    """Create all tables before tests, drop after."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 
 # ============================================================================

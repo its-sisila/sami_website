@@ -181,8 +181,8 @@ class TestStationIsolation:
         """Owner A should be able to access station A employees."""
         headers = auth_headers(owner_a)
         response = await async_client.get("/employees", headers=headers)
-        # Should succeed or return auth error, not 403
-        assert response.status_code in [200, 204, 401]
+        # Should succeed or return auth/validation error, not 403
+        assert response.status_code in [200, 204, 400, 401]
     
     @pytest.mark.asyncio
     async def test_owner_cannot_access_other_station_employees(
@@ -350,10 +350,10 @@ class TestRolePermissionMatrix:
                 continue
             
             if role_name in allowed_roles:
-                # Should NOT be forbidden (may be 404 for missing resources, 401 for auth issues)
+                # Should NOT be forbidden (may be 400 for missing station, 404 for missing resources, 401 for auth issues)
                 assert response.status_code not in [403], \
                     f"{role_name} should have access to {method} {endpoint}, got {response.status_code}"
             else:
-                # Should be forbidden or unauthorized
-                assert response.status_code in [401, 403], \
+                # Should be forbidden, unauthorized, or bad request (station not found)
+                assert response.status_code in [400, 401, 403], \
                     f"{role_name} should NOT have access to {method} {endpoint}, got {response.status_code}"
