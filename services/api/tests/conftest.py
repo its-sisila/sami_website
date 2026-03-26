@@ -20,17 +20,22 @@ from app.core.database import Base, engine
 from app.modules.auth.models import UserRole
 
 # Import ALL model modules so they register with Base.metadata
-import app.modules.auth.models          # noqa: F401
-import app.modules.accounts.models      # noqa: F401
-import app.modules.employees.models     # noqa: F401
-import app.modules.inventory.models     # noqa: F401
-import app.modules.sales.models         # noqa: F401
-import app.modules.orders.models        # noqa: F401
-import app.modules.settlements.models   # noqa: F401
-import app.modules.stations.models      # noqa: F401
-import app.modules.admin.models         # noqa: F401
-import app.modules.expenses.models      # noqa: F401
-import app.modules.pricing.models       # noqa: F401
+# Use importlib to avoid shadowing the FastAPI `app` instance with the `app` package
+import importlib
+for _model_module in [
+    "app.modules.auth.models",
+    "app.modules.accounts.models",
+    "app.modules.employees.models",
+    "app.modules.inventory.models",
+    "app.modules.sales.models",
+    "app.modules.orders.models",
+    "app.modules.settlements.models",
+    "app.modules.stations.models",
+    "app.modules.admin.models",
+    "app.modules.expenses.models",
+    "app.modules.pricing.models",
+]:
+    importlib.import_module(_model_module)
 
 
 # ============================================================================
