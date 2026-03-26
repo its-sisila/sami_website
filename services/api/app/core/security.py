@@ -28,6 +28,7 @@ class TokenPayload(BaseModel):
     sub: str  # user_id
     email: str | None = None
     role: str | None = None
+    station_id: str | None = None
     aud: str | None = None
     exp: int | None = None
 
@@ -143,11 +144,14 @@ async def get_current_user(
     # Use database role if available, otherwise fall back to JWT token role
     final_role = db_role or token_payload.role
     
+    # Fallback to token payload for station_id (useful for tests or token-based auth)
+    final_station_id = station_id or getattr(token_payload, "station_id", None)
+    
     return CurrentUser(
         user_id=token_payload.sub,
         email=token_payload.email,
         role=final_role,
-        station_id=station_id,
+        station_id=final_station_id,
     )
 
 

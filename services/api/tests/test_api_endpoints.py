@@ -22,8 +22,8 @@ AUTHENTICATED_ENDPOINTS = [
     ("/sales/shifts/current", "GET"),
     ("/stations", "GET"),
     ("/orders", "GET"),
-    ("/settlements", "GET"),
-    ("/users/me", "GET"),
+    ("/settlements/card", "GET"),
+    ("/users", "GET"),
     ("/expenses", "GET"),
 ]
 

@@ -44,6 +44,7 @@ class MockUser:
             "sub": self.user_id,
             "email": self.email,
             "role": self.role.value,
+            "station_id": self.station_id,
             "aud": "authenticated",
             "exp": int((datetime.utcnow() + timedelta(seconds=expires_in)).timestamp()),
             "iat": int(datetime.utcnow().timestamp()),
