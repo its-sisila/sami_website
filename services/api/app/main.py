@@ -59,9 +59,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     print(traceback.format_exc())
     
     # Return a proper JSON response (CORS headers will be added by middleware)
+    detail = f"Internal server error: {str(exc)}" if settings.debug else "Internal server error"
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Internal server error: {str(exc)}"},
+        content={"detail": detail},
     )
 
 
@@ -79,14 +80,6 @@ async def health_check():
     """Health check endpoint."""
     return {"status": "ok", "service": settings.app_name}
 
-
-@app.get("/debug/cors")
-async def debug_cors():
-    """Debug endpoint to check loaded CORS origins."""
-    return {
-        "cors_origins": settings.cors_origins,
-        "cors_origins_type": str(type(settings.cors_origins)),
-    }
 
 
 # Mount module routers
