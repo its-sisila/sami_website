@@ -97,17 +97,21 @@ async def setup_database():
 class MockUser:
     """Mock user for testing with role and station assignment."""
     
+    _UNSET = object()  # sentinel to distinguish "not provided" from None
+    
     def __init__(
         self,
         user_id: str | None = None,
         email: str = "test@example.com",
         role: UserRole = UserRole.owner,
-        station_id: str | None = None,
+        station_id=_UNSET,
     ):
         self.user_id = user_id or str(uuid4())
         self.email = email
         self.role = role
-        self.station_id = station_id or str(uuid4())
+        # Only auto-generate station_id if not provided at all;
+        # preserve explicit None (e.g. system_admin has no station)
+        self.station_id = str(uuid4()) if station_id is MockUser._UNSET else station_id
     
     def make_token(self, expires_in: int = 3600) -> str:
         """Generate a valid JWT token for this user."""
