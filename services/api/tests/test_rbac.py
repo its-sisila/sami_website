@@ -312,8 +312,8 @@ class TestRolePermissionMatrix:
         ("/admin/audit-log", "GET", ["system_admin"]),
         ("/employees", "GET", ["system_admin", "owner", "manager", "accountant", "supervisor"]),
         ("/inventory/tanks", "GET", ["system_admin", "owner", "manager", "accountant", "supervisor"]),
-        ("/sales/shifts/current", "GET", ["system_admin", "owner", "manager", "supervisor"]),
-        ("/orders", "GET", ["system_admin", "owner", "manager", "accountant"]),
+        ("/sales/shifts/current", "GET", ["system_admin", "owner", "manager", "accountant", "supervisor"]),
+        ("/orders", "GET", ["system_admin", "owner", "manager", "accountant", "supervisor"]),
     ]
     
     @pytest.mark.asyncio
