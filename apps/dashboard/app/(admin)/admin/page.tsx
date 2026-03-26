@@ -101,92 +101,7 @@ export default function AdminPage() {
     const { data: currentUser, isLoading: userLoading } = useCurrentUser();
     const [isAssigningMyStation, setIsAssigningMyStation] = useState(false);
 
-    // System Admin Access Control
-    useEffect(() => {
-        if (!userLoading && currentUser && currentUser.role !== 'system_admin') {
-            router.push('/dashboard');
-        }
-    }, [currentUser, userLoading, router]);
-
-    // Show loading while checking permissions
-    if (userLoading) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-            </div>
-        );
-    }
-
-    // Show access denied if not system_admin
-    if (!currentUser || currentUser.role !== 'system_admin') {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <div className="text-center">
-                    <Shield className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
-                    <p className="text-slate-600 mb-4">You do not have permission to access the Admin Panel.</p>
-                    <button
-                        onClick={() => router.push('/dashboard')}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                    >
-                        Return to Dashboard
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    // Fetch station configuration data when station is selected
-    useEffect(() => {
-        if (!selectedStationId) {
-            setProducts([]);
-            setTanks([]);
-            setNozzles([]);
-            setPumps([]);
-            return;
-        }
-
-        const fetchConfigData = async () => {
-            setIsLoadingConfig(true);
-            try {
-                const [productsData, tanksData, nozzlesData, usersData, pumpsData] = await Promise.all([
-                    api.inventory.getProducts(selectedStationId),
-                    api.inventory.getTanks(undefined, selectedStationId),
-                    api.inventory.getNozzles(selectedStationId),
-                    api.users.getAll(selectedStationId),
-                    api.inventory.getPumps(selectedStationId),
-                ]);
-                setProducts(productsData.map(p => ({ id: p.id, code: p.code, name: p.name, price_per_liter: p.price_per_liter })));
-                setTanks(tanksData.map(t => ({ id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name ?? undefined, tank_type: t.tank_type ?? undefined, capacity_liters: t.capacity_liters })));
-                setNozzles(nozzlesData.map(n => ({
-                    id: n.id,
-                    nozzle_code: n.nozzle_code,
-                    nozzle_name: n.nozzle_name || 'Unnamed',
-                    tank_id: n.tank_id,
-                    pump_id: n.pump_id,
-                    product_id: n.product_id,
-                    pump_name: n.pump_name ?? undefined,
-                    product_name: n.product_name ?? undefined,
-                    is_active: n.is_active,
-                } as any)));
-                setPumps(pumpsData);
-                setStationUsers(usersData);
-                const owner = usersData.find(u => u.role === 'owner') || null;
-                setOwnerUser(owner);
-                // Reset password form state when switching stations
-                setResetPassword('');
-                setResetPasswordSuccess('');
-            } catch (err) {
-                console.error('Failed to fetch config data:', err);
-            } finally {
-                setIsLoadingConfig(false);
-            }
-        };
-
-        fetchConfigData();
-    }, [selectedStationId]);
-
-    // Fetch support access for selected station
+    // Fetch support access for selected station ALWAYS at top level
     const { data: supportAccess, mutate: mutateSupportAccess } = useSupportAccess(selectedStationId || null);
 
     // Map API stations to component format, fallback to mock data
@@ -233,6 +148,86 @@ export default function AdminPage() {
         }
         return station;
     }, [stations, selectedStationId, supportAccess]);
+        if (!selectedStationId) {
+            setProducts([]);
+            setTanks([]);
+            setNozzles([]);
+            setPumps([]);
+            return;
+        }
+
+        const fetchConfigData = async () => {
+            setIsLoadingConfig(true);
+            try {
+                const [productsData, tanksData, nozzlesData, usersData, pumpsData] = await Promise.all([
+                    api.inventory.getProducts(selectedStationId),
+                    api.inventory.getTanks(undefined, selectedStationId),
+                    api.inventory.getNozzles(selectedStationId),
+                    api.users.getAll(selectedStationId),
+                    api.inventory.getPumps(selectedStationId),
+                ]);
+                setProducts(productsData.map(p => ({ id: p.id, code: p.code, name: p.name, price_per_liter: p.price_per_liter })));
+                setTanks(tanksData.map(t => ({ id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name ?? undefined, tank_type: t.tank_type ?? undefined, capacity_liters: t.capacity_liters })));
+                setNozzles(nozzlesData.map(n => ({
+                    id: n.id,
+                    nozzle_code: n.nozzle_code,
+                    nozzle_name: n.nozzle_name || 'Unnamed',
+                    tank_id: n.tank_id,
+                    pump_id: n.pump_id,
+                    product_id: n.product_id,
+                    pump_name: n.pump_name ?? undefined,
+                    product_name: n.product_name ?? undefined,
+                    is_active: n.is_active,
+                } as any)));
+                setPumps(pumpsData);
+                setStationUsers(usersData);
+                const owner = usersData.find(u => u.role === 'owner') || null;
+                setOwnerUser(owner);
+                // Reset password form state when switching stations
+                setResetPassword('');
+                setResetPasswordSuccess('');
+            } catch (err) {
+                console.error('Failed to fetch config data:', err);
+            } finally {
+                setIsLoadingConfig(false);
+            }
+        };
+
+        fetchConfigData();
+    // System Admin Access Control
+    useEffect(() => {
+        if (!userLoading && currentUser && currentUser.role !== 'system_admin') {
+            router.push('/dashboard');
+        }
+    }, [currentUser, userLoading, router]);
+
+    // Show loading while checking permissions
+    if (userLoading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            </div>
+        );
+    }
+
+    // Show access denied if not system_admin
+    if (!currentUser || currentUser.role !== 'system_admin') {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Shield className="h-16 w-16 text-slate-400 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
+                    <p className="text-slate-600 mb-4">You do not have permission to access the Admin Panel.</p>
+                    <button
+                        onClick={() => router.push('/dashboard')}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                    >
+                        Return to Dashboard
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     const handleToggleSupportMode = async () => {
         if (!selectedStation) return;

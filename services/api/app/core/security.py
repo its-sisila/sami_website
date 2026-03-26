@@ -28,6 +28,7 @@ class TokenPayload(BaseModel):
     sub: str  # user_id
     email: str | None = None
     role: str | None = None
+    station_id: str | None = None
     aud: str | None = None
     exp: int | None = None
 
@@ -128,26 +129,13 @@ async def get_current_user(
             # Handle Enum or String comparison robustly
             profile_role_str = str(row.profile_role.value if hasattr(row.profile_role, 'value') else row.profile_role)
             
-            # Temporary: Force system admin for the known admin user to recover from role downgrade
-            if str(user_uuid) == "52aa485a-7d92-4c33-93b8-54945de0216c":
-                db_role = "system_admin"
-            elif profile_role_str == "system_admin":
+            if profile_role_str == "system_admin":
                 db_role = "system_admin"
             else:
                 db_role = row.station_role or row.profile_role
                 # Convert station role to string if it's an enum
                 if hasattr(db_role, 'value'):
                     db_role = db_role.value
-        
-        # Fallback: If no Profile found but it's the specific system admin user
-        elif str(user_uuid) == "52aa485a-7d92-4c33-93b8-54945de0216c":
-             db_role = "system_admin"
-             # Fetch station_id separately since Profile query failed
-             stmt_station = select(UserStationRole.station_id).where(UserStationRole.user_id == user_uuid)
-             result_station = await db.execute(stmt_station)
-             station_id_uuid = result_station.scalar_one_or_none()
-             if station_id_uuid:
-                 station_id = str(station_id_uuid)
 
     except Exception:
         # If query fails, continue without station_id/role
@@ -156,11 +144,14 @@ async def get_current_user(
     # Use database role if available, otherwise fall back to JWT token role
     final_role = db_role or token_payload.role
     
+    # Fallback to token payload for station_id (useful for tests or token-based auth)
+    final_station_id = station_id or getattr(token_payload, "station_id", None)
+    
     return CurrentUser(
         user_id=token_payload.sub,
         email=token_payload.email,
         role=final_role,
-        station_id=station_id,
+        station_id=final_station_id,
     )
 
 

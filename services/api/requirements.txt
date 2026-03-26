@@ -21,3 +21,17 @@ httpx>=0.26.0
 
 # Form data parsing
 python-multipart>=0.0.6
+
+# Web scraping (for MOPS data)
+requests>=2.31.0
+beautifulsoup4>=4.12.3
+lxml>=4.9.3
+cloudscraper>=1.2.71
+yfinance>=0.2.36
+
+# Background jobs (for scheduled data fetching)
+apscheduler>=3.10.4
+
+# AI / LLM Integration
+agno>=1.0.0
+google-genai>=0.2.2

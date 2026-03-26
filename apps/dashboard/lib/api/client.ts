@@ -1300,6 +1300,61 @@ export const health = {
 };
 
 // ============================================================================
+// Pricing Endpoints (MOPS Data)
+// ============================================================================
+
+export const pricing = {
+    /**
+     * Get latest 30-day MOPS averages and exchange rate
+     */
+    getLatest: () => request<{
+        mogas_92_average: number | null;
+        gasoil_average: number | null;
+        exchange_rate: number | null;
+        last_updated: string | null;
+        period_days: number;
+        data_source: string;
+    }>('/pricing/latest'),
+
+    /**
+     * Manually refresh pricing data (admin only)
+     */
+    refresh: () => request<{
+        message: string;
+        mogas_records: number;
+        gasoil_records: number;
+        mogas_average: number;
+        gasoil_average: number;
+    }>('/pricing/refresh', { method: 'POST' }),
+
+    /**
+     * Ask the AI Market Analyst for stocking advice
+     */
+    askAnalyst: (question: string) => request<{ advice: string }>('/pricing/ask-analyst', {
+        method: 'POST',
+        body: JSON.stringify({ question }),
+    }),
+
+    /**
+     * Get live market data snapshot (scraped from Barchart, Investing.com, Yahoo Finance)
+     */
+    getMarketSnapshot: () => request<{
+        mogas_92_price: number | null;
+        mogas_92_source: string | null;
+        mogas_92_history: { date: string; price: number }[];
+        gasoil_price: number | null;
+        gasoil_source: string | null;
+        gasoil_history: { date: string; price: number }[];
+        exchange_rate: number | null;
+        exchange_source: string | null;
+        crude_oil_price: number | null;
+        crude_oil_source: string | null;
+        fetched_at: string;
+        errors: string[];
+    }>('/pricing/market-snapshot'),
+};
+
+// ============================================================================
 // Export all API modules
 // ============================================================================
 
@@ -1318,6 +1373,7 @@ export const api = {
     auth,
     stations,
     health,
+    pricing,
 };
 
 export default api;
