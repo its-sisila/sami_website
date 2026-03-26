@@ -52,10 +52,40 @@ def event_loop():
 
 @pytest.fixture(scope="session", autouse=True)
 async def setup_database():
-    """Create all tables before tests, drop after."""
+    """Create all tables and seed test data before tests, drop after."""
+    from sqlalchemy import text
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Seed test stations and profiles so FK constraints are satisfied
+    async with engine.begin() as conn:
+        # Insert test stations
+        await conn.execute(text(
+            "INSERT INTO stations (id, name, status, created_at, updated_at) "
+            "VALUES (:id, :name, 'active', NOW(), NOW()) ON CONFLICT DO NOTHING"
+        ), {"id": STATION_A_ID, "name": "Test Station A"})
+        await conn.execute(text(
+            "INSERT INTO stations (id, name, status, created_at, updated_at) "
+            "VALUES (:id, :name, 'active', NOW(), NOW()) ON CONFLICT DO NOTHING"
+        ), {"id": STATION_B_ID, "name": "Test Station B"})
+
+        # Insert test user profiles
+        for key, user in MOCK_USERS.items():
+            await conn.execute(text(
+                "INSERT INTO profiles (id, email, role, created_at, updated_at) "
+                "VALUES (:id, :email, :role, NOW(), NOW()) ON CONFLICT DO NOTHING"
+            ), {"id": user.user_id, "email": user.email, "role": user.role.value})
+
+            # Assign non-admin users to their station
+            if user.station_id:
+                await conn.execute(text(
+                    "INSERT INTO user_station_roles (id, user_id, station_id, role, created_at, updated_at) "
+                    "VALUES (gen_random_uuid(), :user_id, :station_id, :role, NOW(), NOW()) ON CONFLICT DO NOTHING"
+                ), {"user_id": user.user_id, "station_id": user.station_id, "role": user.role.value})
+
     yield
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
