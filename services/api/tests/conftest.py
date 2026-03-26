@@ -84,10 +84,8 @@ async def setup_database():
                     "VALUES (gen_random_uuid(), :user_id, :station_id, :role, NOW(), NOW()) ON CONFLICT DO NOTHING"
                 ), {"user_id": user.user_id, "station_id": user.station_id, "role": user.role.value})
 
-    yield
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    # No teardown needed: CI Postgres container is ephemeral,
+    # and dropping tables causes asyncio loop conflict at the end of the test session.
 
 
 # ============================================================================
