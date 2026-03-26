@@ -31,13 +31,28 @@ pytest.ini
 *.md
 docs/
 
-# Debug files - but NOT requirements.txt
+# Debug output files - but NOT requirements.txt
 orders_error.txt
 traceback.txt
+debug_output.txt
+pdf_content.txt
 *.log
 
-# Development scripts
+# Development/debug scripts (must not ship to production)
+debug_*.py
 check_db_state.py
-debug_user.py
-promote_user.py
+reset_demo_password.py
+add_mock_pricing_data.py
+find_curr_ids.py
 test_pydantic.py
+extract_pdf.py
+promote_user.py
+debug_user.py
+scraping.py
+price_formula.py
+
+# Extra virtual environments
+venv312/
+
+# Scripts directory (development utilities)
+scripts/

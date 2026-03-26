@@ -6,10 +6,11 @@ Reads environment variables for database and Supabase connections.
 import json
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import model_validator
 
 
-# Default CORS origins as a string (comma-separated)
-DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://localhost:3001,https://dashboard.getsami.app,https://getsami.app,https://www.getsami.app"
+# Default CORS origins — production only. Add localhost via .env for development.
+DEFAULT_CORS_ORIGINS = "https://dashboard.getsami.app,https://getsami.app,https://www.getsami.app"
 
 
 class Settings(BaseSettings):
@@ -40,6 +41,20 @@ class Settings(BaseSettings):
     
     # CORS - stored as string, converted to list via property
     cors_origins_str: str = DEFAULT_CORS_ORIGINS
+
+    @model_validator(mode="after")
+    def validate_critical_settings(self):
+        """Fail fast if critical secrets are not configured."""
+        if not self.jwt_secret:
+            raise ValueError(
+                "JWT_SECRET is not set. Get it from Supabase Dashboard -> Settings -> API -> JWT Secret."
+            )
+        if "password" in self.database_url and "localhost" in self.database_url:
+            raise ValueError(
+                "DATABASE_URL appears to be the default placeholder. "
+                "Set it to your actual Supabase Postgres connection string."
+            )
+        return self
     
     @property
     def cors_origins(self) -> list[str]:
