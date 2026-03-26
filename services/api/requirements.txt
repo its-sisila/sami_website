@@ -31,3 +31,7 @@ yfinance>=0.2.36
 
 # Background jobs (for scheduled data fetching)
 apscheduler>=3.10.4
+
+# AI / LLM Integration
+agno>=1.0.0
+google-genai>=0.2.2

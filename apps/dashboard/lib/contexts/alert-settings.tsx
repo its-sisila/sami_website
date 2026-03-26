@@ -50,24 +50,23 @@ export function AlertSettingsProvider({ children }: { children: ReactNode }) {
         }
     );
 
-    // Convert API settings to local format, fallback to localStorage then defaults
-    const [localSettings, setLocalSettings] = useState<AlertSettings>(defaultSettings);
-
-    // Initialize from localStorage on mount (fallback)
-    useEffect(() => {
+    // Initialize from localStorage explicitly on mount (bypasses SSR mismatch by doing this mostly on client-side state)
+    const [localSettings, setLocalSettings] = useState<AlertSettings>(() => {
+        if (typeof window === 'undefined') return defaultSettings;
         try {
             const stored = localStorage.getItem(ALERT_SETTINGS_KEY);
             if (stored) {
                 const parsed = JSON.parse(stored);
-                setLocalSettings({
+                return {
                     lateArrivalThreshold: parsed.lateArrivalThreshold ?? DEFAULT_LATE_THRESHOLD_MINUTES,
                     earlyDepartureThreshold: parsed.earlyDepartureThreshold ?? DEFAULT_EARLY_THRESHOLD_MINUTES,
-                });
+                };
             }
         } catch (err) {
             console.error('Failed to load alert settings from localStorage:', err);
         }
-    }, []);
+        return defaultSettings;
+    });
 
     // Derive settings from API (if available) or localStorage
     const settings: AlertSettings = apiSettings
