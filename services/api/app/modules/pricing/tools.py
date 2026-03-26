@@ -219,12 +219,25 @@ def get_petrol_92_prediction() -> str:
     ceypetco = scrape_ceypetco_prices()
     current_mrp = ceypetco.get("petrol_92", 0.0)
 
-    mops_usd = scrape_barchart_price()
+    # Try Barchart first, fall back to Investing.com if it fails
+    try:
+        mops_usd = scrape_barchart_price()
+        data_source = "Barchart"
+    except Exception as e:
+        logger.warning(f"Barchart scraper failed ({e}), falling back to Investing.com")
+        mogas_prices = scrape_investing_historical_prices("mogas_92", days=7)
+        if not mogas_prices:
+            raise ValueError(
+                "Could not fetch Mogas 92 prices from either Barchart or Investing.com"
+            )
+        mops_usd = mogas_prices[0]["price"]
+        data_source = "Investing.com"
+
     exchange_rate = scrape_exchange_rate()
 
     logger.info(
-        "Petrol 92 — MOPS: $%.2f, XR: %.2f, Gazette MRP: Rs.%.2f",
-        mops_usd, exchange_rate, current_mrp,
+        "Petrol 92 — MOPS: $%.2f (%s), XR: %.2f, Gazette MRP: Rs.%.2f",
+        mops_usd, data_source, exchange_rate, current_mrp,
     )
 
     breakdown = _compute_predicted_mrp(mops_usd, exchange_rate, "petrol_92")
