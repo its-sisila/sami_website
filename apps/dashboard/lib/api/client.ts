@@ -1334,6 +1334,24 @@ export const pricing = {
         method: 'POST',
         body: JSON.stringify({ question }),
     }),
+
+    /**
+     * Get live market data snapshot (scraped from Barchart, Investing.com, Yahoo Finance)
+     */
+    getMarketSnapshot: () => request<{
+        mogas_92_price: number | null;
+        mogas_92_source: string | null;
+        mogas_92_history: { date: string; price: number }[];
+        gasoil_price: number | null;
+        gasoil_source: string | null;
+        gasoil_history: { date: string; price: number }[];
+        exchange_rate: number | null;
+        exchange_source: string | null;
+        crude_oil_price: number | null;
+        crude_oil_source: string | null;
+        fetched_at: string;
+        errors: string[];
+    }>('/pricing/market-snapshot'),
 };
 
 // ============================================================================

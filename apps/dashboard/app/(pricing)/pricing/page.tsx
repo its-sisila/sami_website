@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2 } from "lucide-react";
+import useSWR from "swr";
+import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2, Activity, Globe, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -84,16 +85,25 @@ export default function PricingPage() {
     // ----- AI Analyst state -----
     const [analystAdvice, setAnalystAdvice] = useState<string | null>(null);
     const [analystLoading, setAnalystLoading] = useState(false);
+    const [analystError, setAnalystError] = useState<string | null>(null);
 
     const handleAskAnalyst = async () => {
         setAnalystLoading(true);
         setAnalystAdvice(null);
+        setAnalystError(null);
         try {
             const { advice } = await api.pricing.askAnalyst(AI_DEFAULT_PROMPT);
             setAnalystAdvice(advice);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Failed to get AI advice";
-            toast.error(message);
+            // Show user-friendly messages based on error type
+            if (message.includes("503") || message.includes("high demand")) {
+                setAnalystError("The AI model is currently experiencing high demand. This is usually temporary — please try again in a minute.");
+            } else if (message.includes("502") || message.includes("unavailable")) {
+                setAnalystError("The AI analyst is temporarily unavailable. Please try again shortly.");
+            } else {
+                setAnalystError(message);
+            }
         } finally {
             setAnalystLoading(false);
         }
@@ -110,6 +120,23 @@ export default function PricingPage() {
             },
         });
         setBreakdown(result);
+    };
+
+    // ----- Market Snapshot state (on-demand) -----
+    const { data: marketSnapshot, isLoading: marketLoading, mutate: refetchMarket } = useSWR(
+        '/pricing/market-snapshot',
+        api.pricing.getMarketSnapshot,
+        {
+            revalidateOnFocus: false,
+            revalidateOnReconnect: false,
+            refreshInterval: 0,
+            revalidateOnMount: false, // Don't auto-fetch on mount
+        }
+    );
+    const [marketFetched, setMarketFetched] = useState(false);
+    const handleFetchMarket = async () => {
+        setMarketFetched(true);
+        await refetchMarket();
     };
 
     const handleInputChange = (field: keyof PricingInputs, value: string | FuelType) => {
@@ -266,8 +293,31 @@ export default function PricingPage() {
                             </div>
                         )}
 
+                        {/* Error state */}
+                        {analystError && !analystLoading && (
+                            <div className="relative rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-950/40 via-slate-900/60 to-slate-900/80 shadow-lg">
+                                <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-amber-500" />
+                                <div className="pl-6 pr-5 py-5">
+                                    <div className="flex items-start gap-3">
+                                        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-amber-300 mb-1">Unable to get AI advice</p>
+                                            <p className="text-sm text-slate-300 mb-3">{analystError}</p>
+                                            <Button
+                                                onClick={handleAskAnalyst}
+                                                className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs px-3 py-1.5 rounded-lg"
+                                            >
+                                                <RefreshCw className="w-3 h-3 mr-1.5" />
+                                                Try Again
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Empty-state hint */}
-                        {!analystAdvice && !analystLoading && (
+                        {!analystAdvice && !analystLoading && !analystError && (
                             <div className="flex items-center gap-2 text-xs text-slate-600">
                                 <Sparkles className="w-3 h-3" />
                                 Click the button above to get live AI-powered market advice
@@ -276,6 +326,196 @@ export default function PricingPage() {
                     </div>
                 </div>
                 {/* ── End AI Market Analyst Section ── */}
+
+                {/* ── Live Market Data Section ── */}
+                <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="h-1 bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500" />
+                    <div className="p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-2.5 rounded-xl shadow-lg shadow-emerald-500/20">
+                                    <Activity className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-semibold text-white tracking-tight">
+                                        Live Market Data
+                                    </h2>
+                                    <p className="text-xs text-slate-500">
+                                        Singapore MOPS &bull; Brent Crude &bull; USD/LKR Exchange Rate
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                onClick={handleFetchMarket}
+                                disabled={marketLoading}
+                                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium px-5 py-2.5 rounded-lg shadow-lg shadow-emerald-500/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {marketLoading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Fetching…
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="w-4 h-4 mr-2" />
+                                        {marketFetched ? 'Refresh Data' : 'Load Live Market Data'}
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+
+                        {/* Loading skeleton */}
+                        {marketLoading && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
+                                {[1, 2, 3, 4].map((i) => (
+                                    <div key={i} className="bg-slate-800/60 rounded-xl p-5 space-y-3">
+                                        <div className="h-3 bg-slate-700/60 rounded-full w-1/2" />
+                                        <div className="h-8 bg-slate-700/40 rounded-full w-3/4" />
+                                        <div className="h-3 bg-slate-700/30 rounded-full w-1/3" />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Market data cards */}
+                        {marketSnapshot && !marketLoading && (
+                            <>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                    {/* Mogas 92 */}
+                                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border border-slate-700/50 rounded-xl p-5 hover:border-emerald-500/30 transition-colors">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <BarChart3 className="w-4 h-4 text-emerald-400" />
+                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Mogas 92</p>
+                                        </div>
+                                        {marketSnapshot.mogas_92_price != null ? (
+                                            <>
+                                                <p className="text-2xl font-bold text-white mb-1">${marketSnapshot.mogas_92_price.toFixed(2)}</p>
+                                                <p className="text-xs text-slate-500">USD/barrel</p>
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-slate-500 italic">Unavailable</p>
+                                        )}
+                                        {marketSnapshot.mogas_92_source && (
+                                            <p className="text-[10px] text-slate-600 mt-2">via {marketSnapshot.mogas_92_source}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Gasoil */}
+                                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border border-slate-700/50 rounded-xl p-5 hover:border-amber-500/30 transition-colors">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <BarChart3 className="w-4 h-4 text-amber-400" />
+                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Gasoil (Diesel)</p>
+                                        </div>
+                                        {marketSnapshot.gasoil_price != null ? (
+                                            <>
+                                                <p className="text-2xl font-bold text-white mb-1">${marketSnapshot.gasoil_price.toFixed(2)}</p>
+                                                <p className="text-xs text-slate-500">USD/barrel</p>
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-slate-500 italic">Unavailable</p>
+                                        )}
+                                        {marketSnapshot.gasoil_source && (
+                                            <p className="text-[10px] text-slate-600 mt-2">via {marketSnapshot.gasoil_source}</p>
+                                        )}
+                                    </div>
+
+                                    {/* USD/LKR Exchange Rate */}
+                                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border border-slate-700/50 rounded-xl p-5 hover:border-sky-500/30 transition-colors">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Globe className="w-4 h-4 text-sky-400" />
+                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">USD/LKR</p>
+                                        </div>
+                                        {marketSnapshot.exchange_rate != null ? (
+                                            <>
+                                                <p className="text-2xl font-bold text-white mb-1">Rs. {marketSnapshot.exchange_rate.toFixed(2)}</p>
+                                                <p className="text-xs text-slate-500">per 1 USD</p>
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-slate-500 italic">Unavailable</p>
+                                        )}
+                                        {marketSnapshot.exchange_source && (
+                                            <p className="text-[10px] text-slate-600 mt-2">via {marketSnapshot.exchange_source}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Brent Crude Oil */}
+                                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border border-slate-700/50 rounded-xl p-5 hover:border-red-500/30 transition-colors">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <TrendingUp className="w-4 h-4 text-red-400" />
+                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Brent Crude</p>
+                                        </div>
+                                        {marketSnapshot.crude_oil_price != null ? (
+                                            <>
+                                                <p className="text-2xl font-bold text-white mb-1">${marketSnapshot.crude_oil_price.toFixed(2)}</p>
+                                                <p className="text-xs text-slate-500">USD/barrel</p>
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-slate-500 italic">Unavailable</p>
+                                        )}
+                                        {marketSnapshot.crude_oil_source && (
+                                            <p className="text-[10px] text-slate-600 mt-2">via {marketSnapshot.crude_oil_source}</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* 7-day History Tables */}
+                                {(marketSnapshot.mogas_92_history.length > 0 || marketSnapshot.gasoil_history.length > 0) && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {marketSnapshot.mogas_92_history.length > 0 && (
+                                            <div className="bg-slate-800/40 border border-slate-700/30 rounded-lg p-4">
+                                                <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Mogas 92 — 7 Day History</p>
+                                                <div className="space-y-1">
+                                                    {marketSnapshot.mogas_92_history.map((d) => (
+                                                        <div key={d.date} className="flex justify-between text-xs">
+                                                            <span className="text-slate-500">{d.date}</span>
+                                                            <span className="text-slate-300 font-mono">${d.price.toFixed(2)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {marketSnapshot.gasoil_history.length > 0 && (
+                                            <div className="bg-slate-800/40 border border-slate-700/30 rounded-lg p-4">
+                                                <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Gasoil (Diesel) — 7 Day History</p>
+                                                <div className="space-y-1">
+                                                    {marketSnapshot.gasoil_history.map((d) => (
+                                                        <div key={d.date} className="flex justify-between text-xs">
+                                                            <span className="text-slate-500">{d.date}</span>
+                                                            <span className="text-slate-300 font-mono">${d.price.toFixed(2)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Errors from scrapers */}
+                                {marketSnapshot.errors.length > 0 && (
+                                    <div className="mt-3 text-[11px] text-amber-500/70">
+                                        {marketSnapshot.errors.map((err, i) => (
+                                            <p key={i}>⚠ {err}</p>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Fetched timestamp */}
+                                <p className="text-[10px] text-slate-600 mt-3">
+                                    Last fetched: {new Date(marketSnapshot.fetched_at).toLocaleTimeString()}
+                                </p>
+                            </>
+                        )}
+
+                        {/* Empty state */}
+                        {!marketSnapshot && !marketLoading && !marketFetched && (
+                            <div className="flex items-center gap-2 text-xs text-slate-600">
+                                <Activity className="w-3 h-3" />
+                                Click the button above to fetch live market prices
+                            </div>
+                        )}
+                    </div>
+                </div>
+                {/* ── End Live Market Data Section ── */}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Input Panel */}

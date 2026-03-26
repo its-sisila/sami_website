@@ -3,6 +3,8 @@ API routes for pricing data endpoints
 """
 
 import logging
+from typing import Optional, List
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -13,6 +15,9 @@ from app.core.security import get_current_user, CurrentUser
 from app.modules.pricing.schemas import PricingDataResponse
 from app.modules.pricing.service import get_latest_pricing_data, refresh_all_pricing_data
 from app.modules.pricing.agent import market_analyst
+from app.modules.pricing.scrapers.barchart_scraper import scrape_barchart_price
+from app.modules.pricing.scrapers.investing_scraper import scrape_investing_historical_prices
+from app.modules.pricing.scrapers.exchange_scraper import scrape_exchange_rate
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,37 @@ class AskAnalystRequest(BaseModel):
 class AskAnalystResponse(BaseModel):
     """JSON response from the /ask-analyst endpoint."""
     advice: str = Field(..., description="AI-generated stocking advice")
+
+
+class MarketPricePoint(BaseModel):
+    """A single price data point."""
+    date: str
+    price: float
+
+
+class MarketSnapshotResponse(BaseModel):
+    """Live market data snapshot from scrapers."""
+    # Mogas 92 (Singapore)
+    mogas_92_price: Optional[float] = Field(None, description="Current Mogas 92 spot price (USD/barrel)")
+    mogas_92_source: Optional[str] = None
+    mogas_92_history: List[MarketPricePoint] = Field(default_factory=list)
+
+    # Gasoil (Singapore)
+    gasoil_price: Optional[float] = Field(None, description="Current Gasoil price (USD/barrel)")
+    gasoil_source: Optional[str] = None
+    gasoil_history: List[MarketPricePoint] = Field(default_factory=list)
+
+    # Exchange rate
+    exchange_rate: Optional[float] = Field(None, description="USD/LKR rate")
+    exchange_source: Optional[str] = None
+
+    # Crude oil (Brent)
+    crude_oil_price: Optional[float] = Field(None, description="Brent crude oil price (USD/barrel)")
+    crude_oil_source: Optional[str] = None
+
+    fetched_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    errors: List[str] = Field(default_factory=list)
+
 
 router = APIRouter(prefix="/pricing", tags=["pricing"])
 
@@ -103,23 +139,131 @@ async def ask_analyst(
     Ask the SAMI Market Analyst for stocking advice.
 
     Passes the user's question to an Agno agent backed by Gemini 2.5 Flash.
-    The agent fetches live MOPS prices and exchange rates via its tool,
-    then returns ≤ 3-sentence professional advice.
+    Retries up to 3 times on transient failures (e.g. Gemini 503).
     """
-    try:
-        response = market_analyst.run(body.question)
+    import time
 
-        # Extract the text content from the agent response
-        advice_text: str = response.content
+    max_retries = 3
+    last_error: Exception | None = None
 
-        if not advice_text:
-            raise ValueError("Agent returned an empty response")
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = market_analyst.run(body.question)
 
-        return AskAnalystResponse(advice=advice_text)
+            # Extract the text content from the agent response
+            advice_text: str = response.content
 
-    except Exception as e:
-        logger.error("AI Market Analyst failed: %s", e, exc_info=True)
+            if not advice_text:
+                raise ValueError("Agent returned an empty response")
+
+            return AskAnalystResponse(advice=advice_text)
+
+        except Exception as e:
+            last_error = e
+            error_str = str(e)
+            is_retryable = "503" in error_str or "UNAVAILABLE" in error_str or "overloaded" in error_str.lower()
+
+            if is_retryable and attempt < max_retries:
+                wait = attempt * 2  # 2s, 4s backoff
+                logger.warning(
+                    "Gemini API attempt %d/%d failed (503), retrying in %ds...",
+                    attempt, max_retries, wait,
+                )
+                time.sleep(wait)
+                continue
+
+            # Non-retryable or final attempt — break out
+            break
+
+    # All retries exhausted or non-retryable error
+    error_str = str(last_error)
+    logger.error("AI Market Analyst failed after %d attempts: %s", max_retries, last_error, exc_info=True)
+
+    if "503" in error_str or "UNAVAILABLE" in error_str:
         raise HTTPException(
-            status_code=502,
-            detail=f"AI Market Analyst is temporarily unavailable: {str(e)}",
+            status_code=503,
+            detail="The AI model is currently experiencing high demand. Please try again in a minute.",
         )
+
+    raise HTTPException(
+        status_code=502,
+        detail="AI Market Analyst is temporarily unavailable. Please try again later.",
+    )
+
+
+@router.get("/market-snapshot", response_model=MarketSnapshotResponse)
+async def get_market_snapshot(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    Fetch a live market data snapshot from all configured scrapers.
+
+    Returns current prices for Mogas 92, Gasoil, USD/LKR, and Brent crude.
+    Each source is fault-tolerant — individual failures don't block the response.
+    """
+    errors: list[str] = []
+    result = MarketSnapshotResponse()
+
+    # 1. Mogas 92 — try Barchart, fall back to Investing.com
+    try:
+        result.mogas_92_price = scrape_barchart_price()
+        result.mogas_92_source = "Barchart"
+    except Exception as e:
+        logger.warning(f"Barchart Mogas 92 failed: {e}, trying Investing.com")
+        try:
+            mogas_data = scrape_investing_historical_prices("mogas_92", days=7)
+            if mogas_data:
+                result.mogas_92_price = mogas_data[0]["price"]
+                result.mogas_92_source = "Investing.com"
+                result.mogas_92_history = [
+                    MarketPricePoint(
+                        date=d["date"].strftime("%Y-%m-%d"),
+                        price=d["price"],
+                    )
+                    for d in mogas_data[:7]
+                ]
+            else:
+                errors.append("Mogas 92: No data from either source")
+        except Exception as e2:
+            errors.append(f"Mogas 92: {e2}")
+
+    # 2. Gasoil — Investing.com
+    try:
+        gasoil_data = scrape_investing_historical_prices("gasoil", days=7)
+        if gasoil_data:
+            result.gasoil_price = gasoil_data[0]["price"]
+            result.gasoil_source = "Investing.com"
+            result.gasoil_history = [
+                MarketPricePoint(
+                    date=d["date"].strftime("%Y-%m-%d"),
+                    price=d["price"],
+                )
+                for d in gasoil_data[:7]
+            ]
+        else:
+            errors.append("Gasoil: No data available")
+    except Exception as e:
+        errors.append(f"Gasoil: {e}")
+
+    # 3. USD/LKR Exchange Rate
+    try:
+        result.exchange_rate = scrape_exchange_rate()
+        result.exchange_source = "Yahoo Finance"
+    except Exception as e:
+        errors.append(f"Exchange rate: {e}")
+
+    # 4. Brent Crude Oil — yfinance
+    try:
+        import yfinance as yf
+        brent = yf.Ticker("BZ=F")
+        hist = brent.history(period="1d")
+        if not hist.empty:
+            result.crude_oil_price = round(float(hist["Close"].iloc[-1]), 2)
+            result.crude_oil_source = "Yahoo Finance (Brent)"
+        else:
+            errors.append("Brent crude: No data available")
+    except Exception as e:
+        errors.append(f"Brent crude: {e}")
+
+    result.errors = errors
+    return result
