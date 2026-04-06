@@ -117,7 +117,7 @@ async def _download_model(station_id: str, fuel_type: str) -> object | None:
         resp = await client.get(url, headers=_storage_headers())
         if resp.status_code != 200:
             return None
-        return pickle.loads(resp.content)
+        return pickle.loads(resp.content)  # nosec B301 — trusted internal model from our Supabase Storage
 
 
 # ---------------------------------------------------------------------------
