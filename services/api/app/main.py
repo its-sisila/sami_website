@@ -1,31 +1,152 @@
 """
 SAMI API - FastAPI Entrypoint
-Main application with CORS, routers, and health endpoints.
+Main application with CORS, routers, health endpoints, and scheduled jobs.
 """
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, Base, async_session_factory
 # Ensure models are imported so they are registered with Base
 from app.modules.accounts.models import BankAccount
 from app.modules.pricing.models import DailyMOPSPrice, MonthlyMOPSAverage, ExchangeRate
+from app.modules.forecasting.models import Forecast, Alert  # noqa: F401 — register Stage 2 tables
+
+logger = logging.getLogger(__name__)
+scheduler = AsyncIOScheduler()
+
+
+async def _daily_forecasting_job() -> None:
+    """
+    Nightly job: run the forecasting + anomaly pipeline for every
+    active station.  Scheduled at 23:30 local time.
+    """
+    from sqlalchemy import select
+    from app.modules.stations.models import Station, StationStatus
+    from app.modules.inventory.models import FuelProduct, Nozzle
+    from app.modules.forecasting.engine import (
+        calculate_forecast,
+        detect_anomalies,
+        calculate_reorder_status,
+    )
+    from app.modules.forecasting.router import (
+        _fetch_daily_history,
+        _current_stock,
+        _persist_forecasts,
+        _persist_alert,
+    )
+    from datetime import date
+
+    logger.info("[Scheduler] Starting daily forecasting pipeline…")
+
+    async with async_session_factory() as db:
+        try:
+            stations = (
+                await db.execute(select(Station).where(Station.status == StationStatus.active))
+            ).scalars().all()
+
+            for station in stations:
+                products = (
+                    await db.execute(
+                        select(FuelProduct).where(
+                            FuelProduct.station_id == station.id,
+                            FuelProduct.is_active.is_(True),
+                        )
+                    )
+                ).scalars().all()
+
+                for product in products:
+                    nozzle_ids = [
+                        r[0]
+                        for r in (
+                            await db.execute(
+                                select(Nozzle.id).where(
+                                    Nozzle.product_id == product.id,
+                                    Nozzle.is_active.is_(True),
+                                )
+                            )
+                        ).all()
+                    ]
+
+                    historical = await _fetch_daily_history(
+                        db, station.id, nozzle_ids, days=30,
+                    )
+                    stock = await _current_stock(db, station.id, product.id)
+
+                    forecast, method = await calculate_forecast(
+                        historical,
+                        station_id=str(station.id),
+                        fuel_type=product.code.upper(),
+                    )
+
+                    today_iso = date.today().isoformat()
+                    today_actual = next(
+                        (h["liters"] for h in historical if h["date"] == today_iso),
+                        0.0,
+                    )
+                    yesterday_history = [
+                        h for h in historical if h["date"] < today_iso
+                    ]
+                    anomaly = detect_anomalies(yesterday_history, today_actual)
+                    reorder = calculate_reorder_status(stock, forecast)
+
+                    await _persist_forecasts(
+                        db, station.id, product.code.upper(), forecast, method,
+                    )
+
+                    if anomaly["is_anomaly"]:
+                        await _persist_alert(
+                            db, station.id, "anomaly", anomaly["severity"],
+                            product.code.upper(),
+                            f"Anomaly: {product.name} actual={anomaly['actual']}L z={anomaly['z_score']}",
+                            details=dict(anomaly),
+                        )
+                    if reorder["status"] == "CRITICAL":
+                        await _persist_alert(
+                            db, station.id, "reorder", "critical",
+                            product.code.upper(),
+                            f"CRITICAL reorder: {product.name} stock={reorder['current_stock']}L",
+                            details=dict(reorder),
+                        )
+
+            await db.commit()
+            logger.info("[Scheduler] Daily forecasting pipeline complete.")
+        except Exception:
+            await db.rollback()
+            logger.exception("[Scheduler] Forecasting pipeline failed.")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     print(f"Starting {settings.app_name}...")
-    
+
     # Create tables if they don't exist (dev mode convenience)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        
+
+    # Start nightly forecasting scheduler
+    scheduler.add_job(
+        _daily_forecasting_job,
+        "cron",
+        hour=23,
+        minute=30,
+        id="daily_forecasting",
+        replace_existing=True,
+    )
+    scheduler.start()
+    logger.info("[Scheduler] APScheduler started — daily forecasting at 23:30.")
+
     yield
     # Shutdown
+    scheduler.shutdown(wait=False)
     print(f"Shutting down {settings.app_name}...")
 
 
@@ -96,7 +217,7 @@ from app.modules.users import router as users_router
 from app.modules.exports import router as exports_router
 from app.modules.expenses import router as expenses_router
 from app.modules.pricing.routes import router as pricing_router
-# from app.modules.forecasting.router import router as forecasting_router
+from app.modules.forecasting.router import router as forecasting_router
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(employees_router, prefix="/employees", tags=["employees"])
@@ -111,7 +232,7 @@ app.include_router(users_router, prefix="/users", tags=["users"])
 app.include_router(exports_router, prefix="/exports", tags=["exports"])
 app.include_router(expenses_router, prefix="/expenses", tags=["expenses"])
 app.include_router(pricing_router)  # Already has /pricing prefix in routes.py
-# app.include_router(forecasting_router, prefix="/forecasting", tags=["forecasting"])
+app.include_router(forecasting_router, prefix="/forecasting", tags=["forecasting"])
 
 
 if __name__ == "__main__":
