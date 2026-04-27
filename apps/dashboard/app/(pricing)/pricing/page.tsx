@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2, Activity, Globe, BarChart3 } from "lucide-react";
+import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2, Activity, Globe, BarChart3, Newspaper, ExternalLink, MapPin, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@/lib/pricing-formula";
 import { usePricingData } from "@/lib/hooks/use-pricing-data";
 import api from "@/lib/api/client";
+import WorldGlobe from "@/components/ui/WorldGlobe";
 
 const AI_DEFAULT_PROMPT =
     "Based on current global MOPS and LKR rates, what is your inventory recommendation for Petrol 92 and Diesel for the upcoming week?";
@@ -139,6 +140,50 @@ export default function PricingPage() {
         await refetchMarket();
     };
 
+    // ----- Market News state (auto-fetch, backend has 15-min cache) -----
+    const { data: marketNews, isLoading: newsLoading, mutate: refetchNews } = useSWR(
+        '/pricing/market-news',
+        api.pricing.getMarketNews,
+        {
+            revalidateOnFocus: false,
+            revalidateOnReconnect: false,
+            refreshInterval: 0,
+            revalidateOnMount: true,
+        }
+    );
+    const [newsFetched, setNewsFetched] = useState(false);
+    const [activeNewsTab, setActiveNewsTab] = useState<'local' | 'global'>('local');
+
+    const handleFetchNews = async () => {
+        setNewsFetched(true);
+        try {
+            await refetchNews();
+            toast.success('Market news refreshed');
+        } catch {
+            toast.error('Failed to refresh news');
+        }
+    };
+
+    // Helper to format date
+    const getRelativeTimeString = (dateStr: string) => {
+        try {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffInMs = now.getTime() - date.getTime();
+            const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+            const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+            
+            if (diffInHours < 1) return 'Just now';
+            if (diffInHours < 24) {
+                return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
+            } else {
+                return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`;
+            }
+        } catch(e) {
+            return dateStr;
+        }
+    };
+
     const handleInputChange = (field: keyof PricingInputs, value: string | FuelType) => {
         setInputs((prev) => {
             const updates: Partial<PricingInputs> = {
@@ -208,6 +253,39 @@ export default function PricingPage() {
                         Calculate fuel prices based on the 2025 Sri Lankan Formula (MOPS-based)
                     </p>
                 </div>
+
+                {/* ── Scrolling News Ticker ── */}
+                {marketNews && (marketNews.global_news?.length > 0 || marketNews.local_news?.length > 0) && (
+                    <div className="mb-6 overflow-hidden rounded-lg bg-slate-900/60 border border-slate-800 py-2.5 px-4">
+                        <div className="flex animate-marquee whitespace-nowrap gap-12">
+                            {[...( marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
+                                <span key={i} className="inline-flex items-center gap-2 text-xs text-slate-300">
+                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                        item.sentiment === 'bullish' ? 'bg-emerald-400' :
+                                        item.sentiment === 'bearish' ? 'bg-red-400' :
+                                        'bg-slate-500'
+                                    }`} />
+                                    <span className="font-medium">{item.source}</span>
+                                    <span className="text-slate-500">|</span>
+                                    <span>{item.title?.length > 80 ? item.title.slice(0, 80) + '…' : item.title}</span>
+                                </span>
+                            ))}
+                            {/* Duplicate for seamless loop */}
+                            {[...(marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
+                                <span key={`dup-${i}`} className="inline-flex items-center gap-2 text-xs text-slate-300">
+                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                        item.sentiment === 'bullish' ? 'bg-emerald-400' :
+                                        item.sentiment === 'bearish' ? 'bg-red-400' :
+                                        'bg-slate-500'
+                                    }`} />
+                                    <span className="font-medium">{item.source}</span>
+                                    <span className="text-slate-500">|</span>
+                                    <span>{item.title?.length > 80 ? item.title.slice(0, 80) + '…' : item.title}</span>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* ── AI Market Analyst Section ── */}
                 <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
@@ -516,6 +594,174 @@ export default function PricingPage() {
                     </div>
                 </div>
                 {/* ── End Live Market Data Section ── */}
+
+                {/* ── Market News Section ── */}
+                <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-500" />
+                    <div className="p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+                                    <Newspaper className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-semibold text-white tracking-tight">
+                                        Energy Market News
+                                    </h2>
+                                    <p className="text-xs text-slate-500">
+                                        AI-Powered Sentiment &bull; Global &amp; Local Updates
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                onClick={handleFetchNews}
+                                disabled={newsLoading}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {newsLoading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Fetching…
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="w-4 h-4 mr-2" />
+                                        Refresh News
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+
+                        {/* Tabs — always visible */}
+                        <div className="mb-4 border-b border-slate-800">
+                            <div className="flex space-x-4">
+                                <button
+                                    onClick={() => setActiveNewsTab('local')}
+                                    className={`pb-3 text-sm font-medium transition-colors relative ${activeNewsTab === 'local' ? 'text-blue-400' : 'text-slate-400 hover:text-slate-300'}`}
+                                >
+                                    <span className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Sri Lanka</span>
+                                    {activeNewsTab === 'local' && (
+                                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full" />
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setActiveNewsTab('global')}
+                                    className={`pb-3 text-sm font-medium transition-colors relative ${activeNewsTab === 'global' ? 'text-blue-400' : 'text-slate-400 hover:text-slate-300'}`}
+                                >
+                                    <span className="flex items-center gap-2"><Globe className="w-4 h-4" /> Global</span>
+                                    {activeNewsTab === 'global' && (
+                                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full" />
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Loading skeleton */}
+                        {newsLoading && (
+                            <div className="space-y-4 animate-pulse mt-4">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30 flex gap-4">
+                                        <div className="w-16 h-16 bg-slate-700/50 rounded-lg shrink-0" />
+                                        <div className="flex-1 space-y-3">
+                                            <div className="h-4 bg-slate-700/60 rounded-full w-3/4" />
+                                            <div className="flex gap-4">
+                                                <div className="h-3 bg-slate-700/40 rounded-full w-1/4" />
+                                                <div className="h-3 bg-slate-700/30 rounded-full w-1/4" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* News content */}
+                        {marketNews && !newsLoading && (
+                            <div className="mt-4">
+                                {/* Globe — shown above news on Global tab */}
+                                {activeNewsTab === 'global' && (
+                                    <div className="flex justify-center mb-6">
+                                        <WorldGlobe size={280} />
+                                    </div>
+                                )}
+
+                                {/* News list */}
+                                <div className="space-y-3">
+                                    {(activeNewsTab === 'local' ? marketNews.local_news : marketNews.global_news)?.map((item: any, i: number) => (
+                                        <a
+                                            key={i}
+                                            href={item.link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="group flex gap-4 bg-slate-800/40 border border-slate-700/50 hover:border-blue-500/50 rounded-xl p-4 transition-all duration-300 hover:shadow-lg hover:shadow-blue-900/20"
+                                        >
+                                            {/* Thumbnail or gradient placeholder */}
+                                            {item.image_url ? (
+                                                <img
+                                                    src={item.image_url}
+                                                    alt=""
+                                                    className="w-16 h-16 rounded-lg object-cover shrink-0 border border-slate-700/50"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                />
+                                            ) : (
+                                                <div className="w-16 h-16 rounded-lg shrink-0 bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border border-slate-700/50 flex items-center justify-center">
+                                                    <Newspaper className="w-5 h-5 text-slate-600" />
+                                                </div>
+                                            )}
+
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="text-sm font-medium text-slate-200 group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug mb-2">
+                                                    {item.title}
+                                                </h3>
+                                                <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium flex-wrap">
+                                                    <span className="bg-slate-900/50 px-2 py-0.5 rounded text-slate-400">{item.source}</span>
+                                                    <span>•</span>
+                                                    <span>{getRelativeTimeString(item.pubDate)}</span>
+
+                                                    {/* Sentiment badge */}
+                                                    {item.sentiment && item.sentiment !== 'neutral' && (
+                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider ${
+                                                            item.sentiment === 'bullish'
+                                                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                                                : 'bg-red-500/15 text-red-300 border-red-500/30'
+                                                        }`}>
+                                                            {item.sentiment === 'bullish' ? (
+                                                                <><TrendingUp className="w-3 h-3" /> Bullish</>
+                                                            ) : (
+                                                                <><TrendingDown className="w-3 h-3" /> Bearish</>
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                    {item.sentiment === 'neutral' && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider bg-slate-500/15 text-slate-400 border-slate-500/30">
+                                                            <Minus className="w-3 h-3" /> Neutral
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <ExternalLink className="w-4 h-4 text-slate-600 group-hover:text-blue-400 shrink-0 transition-colors mt-1" />
+                                        </a>
+                                    ))}
+                                    {(activeNewsTab === 'local' ? marketNews.local_news : marketNews.global_news)?.length === 0 && (
+                                        <div className="text-center py-6 text-sm text-slate-500">
+                                            No recent news found for this category.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Empty state */}
+                        {!marketNews && !newsLoading && (
+                            <div className="flex items-center gap-2 text-xs text-slate-600 mt-2">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Loading market news…
+                            </div>
+                        )}
+                    </div>
+                </div>
+                {/* ── End Market News Section ── */}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Input Panel */}
