@@ -16,6 +16,20 @@ export interface AccountTrendStat {
 
 export type UUID = string;
 
+export interface MarketNewsItem {
+    title: string;
+    link: string;
+    pubDate: string;
+    source: string;
+    image_url?: string | null;
+    sentiment?: 'bullish' | 'bearish' | 'neutral' | null;
+}
+
+export interface MarketNewsResponse {
+    global_news: MarketNewsItem[];
+    local_news: MarketNewsItem[];
+}
+
 // ============================================================================
 // Enums
 // ============================================================================
