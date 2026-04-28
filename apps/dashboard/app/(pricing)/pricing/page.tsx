@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2, Activity, Globe, BarChart3, Newspaper, ExternalLink, MapPin, Minus } from "lucide-react";
+import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2, Activity, Globe, BarChart3, Newspaper, ExternalLink, MapPin, Minus, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
     calculateFuelPrice,
     formatCurrency,
@@ -35,8 +37,8 @@ function getAdviceSentiment(advice: string): "warning" | "calm" | "neutral" {
 
 const SENTIMENT_STYLES = {
     warning: {
-        border: "border-amber-500/40",
-        bg: "bg-gradient-to-br from-amber-950/60 via-amber-900/30 to-slate-900/80",
+        border: "border-amber-500/30",
+        bg: "bg-slate-900/60 backdrop-blur-md",
         glow: "shadow-amber-500/10",
         icon: <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />,
         badge: "bg-amber-500/20 text-amber-300 border-amber-500/30",
@@ -44,22 +46,22 @@ const SENTIMENT_STYLES = {
         accentBar: "bg-amber-500",
     },
     calm: {
-        border: "border-sky-500/40",
-        bg: "bg-gradient-to-br from-sky-950/60 via-sky-900/30 to-slate-900/80",
+        border: "border-sky-500/30",
+        bg: "bg-slate-900/60 backdrop-blur-md",
         glow: "shadow-sky-500/10",
         icon: <TrendingDown className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />,
         badge: "bg-sky-500/20 text-sky-300 border-sky-500/30",
-        badgeText: "Market Declining",
+        badgeText: "Favorable conditions",
         accentBar: "bg-sky-500",
     },
     neutral: {
-        border: "border-slate-600/40",
-        bg: "bg-gradient-to-br from-slate-800/60 via-slate-900/30 to-slate-900/80",
-        glow: "shadow-slate-500/5",
-        icon: <Sparkles className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />,
-        badge: "bg-red-500/20 text-red-300 border-red-500/30",
+        border: "border-slate-600/30",
+        bg: "bg-slate-900/60 backdrop-blur-md",
+        glow: "shadow-none",
+        icon: <Minus className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />,
+        badge: "bg-slate-800 text-slate-300 border-slate-700",
         badgeText: "Market Stable",
-        accentBar: "bg-red-500",
+        accentBar: "bg-slate-500",
     },
 } as const;
 
@@ -87,6 +89,19 @@ export default function PricingPage() {
     const [analystAdvice, setAnalystAdvice] = useState<string | null>(null);
     const [analystLoading, setAnalystLoading] = useState(false);
     const [analystError, setAnalystError] = useState<string | null>(null);
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleCopyAdvice = async () => {
+        if (!analystAdvice) return;
+        try {
+            await navigator.clipboard.writeText(analystAdvice);
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+            toast.success("Advice copied to clipboard");
+        } catch (err) {
+            toast.error("Failed to copy advice");
+        }
+    };
 
     const handleAskAnalyst = async () => {
         setAnalystLoading(true);
@@ -355,16 +370,37 @@ export default function PricingPage() {
                                     <div className="flex items-start gap-3">
                                         {styles.icon}
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-2">
+                                            <div className="flex items-center justify-between mb-4">
                                                 <span
                                                     className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border ${styles.badge}`}
                                                 >
                                                     {styles.badgeText}
                                                 </span>
+                                                <button 
+                                                    onClick={handleCopyAdvice}
+                                                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors"
+                                                    title="Copy to clipboard"
+                                                >
+                                                    {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                                                </button>
                                             </div>
-                                            <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">
-                                                {analystAdvice}
-                                            </p>
+                                            <div className="text-sm leading-relaxed text-slate-200">
+                                                <ReactMarkdown 
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        p: ({node, ...props}) => <p className="mb-4 last:mb-0" {...props} />,
+                                                        strong: ({node, ...props}) => <strong className="font-semibold text-white" {...props} />,
+                                                        ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-1" {...props} />,
+                                                        ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-1" {...props} />,
+                                                        li: ({node, ...props}) => <li className="text-slate-300" {...props} />,
+                                                        h1: ({node, ...props}) => <h1 className="text-lg font-bold text-white mb-2 mt-4" {...props} />,
+                                                        h2: ({node, ...props}) => <h2 className="text-base font-bold text-white mb-2 mt-4" {...props} />,
+                                                        h3: ({node, ...props}) => <h3 className="text-sm font-bold text-white mb-2 mt-3" {...props} />,
+                                                    }}
+                                                >
+                                                    {analystAdvice}
+                                                </ReactMarkdown>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
