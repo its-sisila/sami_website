@@ -90,6 +90,112 @@ export default function PricingPage() {
     const [analystLoading, setAnalystLoading] = useState(false);
     const [analystError, setAnalystError] = useState<string | null>(null);
     const [isCopied, setIsCopied] = useState(false);
+    const [isLocalFallback, setIsLocalFallback] = useState(false);
+
+    // Generate a local, formula-based advice report using FRESHLY SCRAPED live data
+    const generateLocalFallbackAdvice = (snapshot?: {
+        mogas_92_price: number | null;
+        gasoil_price: number | null;
+        exchange_rate: number | null;
+        crude_oil_price: number | null;
+        fetched_at: string;
+    }): string => {
+        // Use fresh snapshot data first, then DB data, then user inputs as last resort
+        const liveExchangeRate = snapshot?.exchange_rate ?? pricingData?.exchange_rate ?? inputs.exchangeRate;
+        const liveMogasPrice   = snapshot?.mogas_92_price ?? pricingData?.mogas_92_average ?? inputs.mopsPrice;
+        const liveGasoilPrice  = snapshot?.gasoil_price ?? pricingData?.gasoil_average ?? inputs.mopsPrice;
+        const liveCrudePrice   = snapshot?.crude_oil_price ?? null;
+        const livePremium      = inputs.premium > 0 ? inputs.premium : 3.5;
+        const fetchedAt        = snapshot?.fetched_at ?? null;
+
+        const hasData = liveExchangeRate > 0 && (liveMogasPrice > 0 || liveGasoilPrice > 0);
+
+        if (!hasData) {
+            return [
+                "## ⚡ Formula Price Analysis",
+                "",
+                "The AI analyst is temporarily unavailable and live market data could not be fetched.",
+                "Please click **Use Live Data** or enter the MOPS Price and Exchange Rate manually, then try again.",
+            ].join("\n");
+        }
+
+        // Calculate for BOTH fuel types using live scraped prices
+        const txOverrides = {
+            customsDuty: taxOverrides.customsDuty === '' ? 0 : taxOverrides.customsDuty,
+            exciseDuty:  taxOverrides.exciseDuty  === '' ? 0 : taxOverrides.exciseDuty,
+            palLevy:     taxOverrides.palLevy     === '' ? 0 : taxOverrides.palLevy,
+            ssclRate:    taxOverrides.ssclRate    === '' ? 0 : taxOverrides.ssclRate,
+        };
+
+        const calcPetrol = calculateFuelPrice({
+            fuelType: 'petrol_92',
+            mopsPrice: liveMogasPrice,
+            premium: livePremium,
+            exchangeRate: liveExchangeRate,
+            taxOverrides: txOverrides,
+        });
+
+        const calcDiesel = calculateFuelPrice({
+            fuelType: 'diesel',
+            mopsPrice: liveGasoilPrice,
+            premium: livePremium,
+            exchangeRate: liveExchangeRate,
+            taxOverrides: txOverrides,
+        });
+
+        // Inventory recommendation based on MOPS thresholds
+        const calcForReco  = inputs.fuelType === 'petrol_92' ? calcPetrol : calcDiesel;
+        const mopsForReco  = inputs.fuelType === 'petrol_92' ? liveMogasPrice : liveGasoilPrice;
+        const threshHigh   = inputs.fuelType === 'diesel' ? 85 : 90;
+        const threshLow    = inputs.fuelType === 'diesel' ? 70 : 75;
+        const landedShare  = calcForReco.v1_landedCost / calcForReco.mrp;
+        const taxShare     = calcForReco.v4_taxation   / calcForReco.mrp;
+
+        let stockReco: string;
+        let rationale: string;
+        if (mopsForReco > threshHigh) {
+            stockReco = "🔴 **Stock Up** — MOPS is elevated. Consider placing a full order now before costs rise further.";
+            rationale = `MOPS is at **$${mopsForReco.toFixed(2)}/bbl**, above the $${threshHigh}/bbl alert threshold. Landed cost is **${(landedShare * 100).toFixed(1)}%** of MRP.`;
+        } else if (mopsForReco < threshLow) {
+            stockReco = "🟢 **Run Down Stocks** — prices are in a soft range. You can afford to delay re-ordering slightly.";
+            rationale = `MOPS is at **$${mopsForReco.toFixed(2)}/bbl**, below the $${threshLow}/bbl low threshold — a buyer-friendly market.`;
+        } else {
+            stockReco = "🟡 **Hold** — market is in a neutral range. Maintain your normal ordering schedule.";
+            rationale = `MOPS is at **$${mopsForReco.toFixed(2)}/bbl**, within the normal $${threshLow}–$${threshHigh}/bbl band.`;
+        }
+
+        const dataSource = snapshot ? "live scraped prices" : pricingData ? "database averages (may be outdated)" : "user-entered inputs";
+
+        return [
+            "## ⚡ Formula Price Analysis",
+            "",
+            `> *AI analyst unavailable. Calculated using ${dataSource}.*`,
+            "",
+            "### Calculated MRP",
+            `| Fuel Type   | MOPS (USD/bbl) | MRP (LKR/L) | Landed Cost | Taxes |`,
+            `|-------------|---------------|-------------|-------------|-------|`,
+            `| **Petrol 92** | $${liveMogasPrice.toFixed(2)} | **Rs. ${calcPetrol.mrp.toFixed(2)}** | Rs. ${calcPetrol.v1_landedCost.toFixed(2)} | Rs. ${calcPetrol.v4_taxation.toFixed(2)} |`,
+            `| **Diesel**    | $${liveGasoilPrice.toFixed(2)} | **Rs. ${calcDiesel.mrp.toFixed(2)}** | Rs. ${calcDiesel.v1_landedCost.toFixed(2)} | Rs. ${calcDiesel.v4_taxation.toFixed(2)} |`,
+            "",
+            "### Cost Breakdown (selected fuel)",
+            `- **Landed Cost (V1):** Rs. ${calcForReco.v1_landedCost.toFixed(2)}/L — ${(landedShare * 100).toFixed(1)}% of MRP`,
+            `- **Processing & Admin (V2+V3):** Rs. ${(calcForReco.v2_processingCost + calcForReco.v3_adminCost).toFixed(2)}/L`,
+            `- **Finance Surcharge:** Rs. ${calcForReco.financeSurcharge.toFixed(2)}/L`,
+            `- **Total Taxation (V4):** Rs. ${calcForReco.v4_taxation.toFixed(2)}/L — ${(taxShare * 100).toFixed(1)}% of MRP`,
+            "",
+            liveCrudePrice ? `> Brent Crude: **$${liveCrudePrice.toFixed(2)}/bbl**` : "",
+            "",
+            "### Inventory Recommendation",
+            stockReco,
+            "",
+            rationale,
+            "",
+            "### Data Sources",
+            `- Exchange Rate: **Rs. ${liveExchangeRate.toFixed(2)}/USD**`,
+            `- Premium: **$${livePremium.toFixed(2)}/bbl**`,
+            fetchedAt ? `- Fetched at: **${new Date(fetchedAt).toLocaleString()}**` : "",
+        ].filter(Boolean).join("\n");
+    };
 
     const handleCopyAdvice = async () => {
         if (!analystAdvice) return;
@@ -107,18 +213,34 @@ export default function PricingPage() {
         setAnalystLoading(true);
         setAnalystAdvice(null);
         setAnalystError(null);
+        setIsLocalFallback(false);
         try {
             const { advice } = await api.pricing.askAnalyst(AI_DEFAULT_PROMPT);
+            
+            // Check if the AI returned a raw JSON error string instead of actual advice
+            if (typeof advice === 'string' && advice.trim().startsWith('{') && advice.includes('"error"')) {
+                let parsed: { error?: { message?: string } } | null = null;
+                try {
+                    parsed = JSON.parse(advice);
+                } catch {
+                    // Not valid JSON — treat it as normal advice text
+                }
+                if (parsed?.error) {
+                    throw new Error(parsed.error.message || "The AI model is temporarily unavailable.");
+                }
+            }
+
             setAnalystAdvice(advice);
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : "Failed to get AI advice";
-            // Show user-friendly messages based on error type
-            if (message.includes("503") || message.includes("high demand")) {
-                setAnalystError("The AI model is currently experiencing high demand. This is usually temporary — please try again in a minute.");
-            } else if (message.includes("502") || message.includes("unavailable")) {
-                setAnalystError("The AI analyst is temporarily unavailable. Please try again shortly.");
-            } else {
-                setAnalystError(message);
+            // AI unavailable — fetch fresh live data and fall back to formula-based analysis
+            toast.info("AI analyst is busy. Fetching live prices for formula analysis...");
+            setIsLocalFallback(true);
+            try {
+                const snapshot = await api.pricing.getMarketSnapshot();
+                setAnalystAdvice(generateLocalFallbackAdvice(snapshot));
+            } catch {
+                // If even the scraper fails, use whatever data we have
+                setAnalystAdvice(generateLocalFallbackAdvice());
             }
         } finally {
             setAnalystLoading(false);
@@ -371,11 +493,19 @@ export default function PricingPage() {
                                         {styles.icon}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between mb-4">
-                                                <span
-                                                    className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border ${styles.badge}`}
-                                                >
-                                                    {styles.badgeText}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span
+                                                        className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border ${styles.badge}`}
+                                                    >
+                                                        {styles.badgeText}
+                                                    </span>
+                                                    {isLocalFallback && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-slate-600 bg-slate-800 text-slate-400">
+                                                            <Calculator className="w-2.5 h-2.5" />
+                                                            Formula Mode
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <button 
                                                     onClick={handleCopyAdvice}
                                                     className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors"
