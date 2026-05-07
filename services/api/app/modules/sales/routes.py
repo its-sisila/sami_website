@@ -212,10 +212,13 @@ async def get_last_meter_readings(
     return {k: float(v) for k, v in readings.items()}
 
 
+from fastapi import BackgroundTasks
+
 @router.post("/shifts/{shift_id}/complete")
 async def complete_shift(
     shift_id: UUID,
     payload: ShiftCompletePayload,
+    background_tasks: BackgroundTasks,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -234,7 +237,7 @@ async def complete_shift(
     completed_by = UUID(current_user.user_id) if current_user.user_id else None
     
     try:
-        result = await service.complete_shift(shift_id, payload, completed_by, db)
+        result = await service.complete_shift(shift_id, payload, completed_by, db, background_tasks)
         return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
