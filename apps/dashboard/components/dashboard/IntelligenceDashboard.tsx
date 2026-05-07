@@ -9,8 +9,6 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    Legend,
-    ReferenceLine,
 } from "recharts";
 import {
     AlertTriangle,
@@ -21,12 +19,14 @@ import {
     Droplets,
     Package,
     CalendarDays,
+    Activity,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { getAccessToken } from "@/lib/supabase";
+import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
-// Types
+// Types (aligned with Stage 2 SARIMA backend)
 // ---------------------------------------------------------------------------
 
 interface DailySales {
@@ -41,9 +41,10 @@ interface ForecastDay {
 
 interface AnomalyResult {
     is_anomaly: boolean;
+    severity: "ok" | "warning" | "critical";
     actual: number;
-    predicted: number;
-    difference_pct: number;
+    moving_avg_14d: number;
+    z_score: number;
 }
 
 interface ReorderResult {
@@ -60,6 +61,7 @@ interface ForecastResponse {
     product_type: string;
     product_name: string;
     generated_at: string;
+    method: "sarima_v1" | "weighted_moving_average";
     historical: DailySales[];
     forecast: ForecastDay[];
     anomaly: AnomalyResult;
@@ -267,9 +269,12 @@ export default function IntelligenceDashboard({
             >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900">
-                            Demand Forecast
-                        </h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-bold text-slate-900">
+                                Demand Forecast
+                            </h3>
+                            <MethodBadge method={data.method} />
+                        </div>
                         <p className="text-sm text-slate-500">
                             Historical sales vs 7-day prediction for{" "}
                             <span className="font-semibold text-slate-700">
@@ -354,7 +359,7 @@ export default function IntelligenceDashboard({
             </motion.div>
 
             {/* ============================================================ */}
-            {/* Anomaly Warning Card                                         */}
+            {/* Anomaly Card (Z-Score based)                                  */}
             {/* ============================================================ */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -476,37 +481,92 @@ function KpiCard({
     );
 }
 
-/** Anomaly warning card */
+/** Model method badge */
+function MethodBadge({ method }: { method: string }) {
+    const isSarima = method === "sarima_v1";
+    return (
+        <Badge
+            variant="outline"
+            className={`text-[10px] font-semibold uppercase tracking-wider ${
+                isSarima
+                    ? "bg-indigo-50 text-indigo-600 border-indigo-200"
+                    : "bg-slate-50 text-slate-500 border-slate-200"
+            }`}
+        >
+            <Activity className="w-3 h-3 mr-1" />
+            {isSarima ? "SARIMA" : "Weighted Avg"}
+        </Badge>
+    );
+}
+
+/** Anomaly warning card – Z-Score based */
 function AnomalyCard({ anomaly }: { anomaly: AnomalyResult }) {
-    if (!anomaly.is_anomaly) {
-        return (
-            <div className="flex items-start gap-4 rounded-xl p-4 md:p-5 border bg-gradient-to-r from-slate-50 to-slate-50/50 border-slate-200">
-                <CheckCircle2 className="w-5 h-5 text-emerald-500 mt-0.5" />
-                <div>
-                    <h4 className="font-bold text-slate-700">No Anomalies Detected</h4>
-                    <p className="text-sm text-slate-500 mt-1">
-                        Today's actual sales ({anomaly.actual.toLocaleString()} L) are
-                        within the expected range of the predicted{" "}
-                        {anomaly.predicted.toLocaleString()} L (
-                        {anomaly.difference_pct.toFixed(1)}% difference).
-                    </p>
-                </div>
-            </div>
-        );
-    }
+    const severityConfig: Record<
+        string,
+        { bg: string; border: string; icon: React.ReactNode; title: string; textColor: string }
+    > = {
+        ok: {
+            bg: "bg-gradient-to-r from-slate-50 to-slate-50/50",
+            border: "border-slate-200",
+            icon: <CheckCircle2 className="w-5 h-5 text-emerald-500 mt-0.5" />,
+            title: "No Anomalies Detected",
+            textColor: "text-slate-700",
+        },
+        warning: {
+            bg: "bg-gradient-to-r from-amber-50 to-yellow-50",
+            border: "border-amber-200",
+            icon: <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5" />,
+            title: "⚠ Warning – Unusual Activity",
+            textColor: "text-amber-700",
+        },
+        critical: {
+            bg: "bg-gradient-to-r from-rose-50 to-orange-50",
+            border: "border-rose-200",
+            icon: <ShieldAlert className="w-5 h-5 text-rose-500 mt-0.5" />,
+            title: "🚨 Critical Anomaly Detected",
+            textColor: "text-rose-700",
+        },
+    };
+
+    const c = severityConfig[anomaly.severity] ?? severityConfig.ok;
+    const zDisplay = isFinite(anomaly.z_score)
+        ? anomaly.z_score.toFixed(2)
+        : "∞";
 
     return (
-        <div className="flex items-start gap-4 rounded-xl p-4 md:p-5 border bg-gradient-to-r from-rose-50 to-orange-50 border-rose-200">
-            <ShieldAlert className="w-5 h-5 text-rose-500 mt-0.5" />
-            <div>
-                <h4 className="font-bold text-rose-700">⚠ Anomaly Detected</h4>
+        <div className={`flex items-start gap-4 rounded-xl p-4 md:p-5 border ${c.bg} ${c.border}`}>
+            {c.icon}
+            <div className="flex-1">
+                <div className="flex items-center gap-2">
+                    <h4 className={`font-bold ${c.textColor}`}>{c.title}</h4>
+                    {anomaly.severity !== "ok" && (
+                        <Badge
+                            variant="outline"
+                            className={`text-[10px] uppercase tracking-wider ${
+                                anomaly.severity === "critical"
+                                    ? "bg-rose-100 text-rose-700 border-rose-300"
+                                    : "bg-amber-100 text-amber-700 border-amber-300"
+                            }`}
+                        >
+                            Z = {zDisplay}
+                        </Badge>
+                    )}
+                </div>
                 <p className="text-sm text-slate-600 mt-1">
-                    Today's actual sales ({anomaly.actual.toLocaleString()} L) deviate by{" "}
-                    <span className="font-bold text-rose-600">
-                        {anomaly.difference_pct.toFixed(1)}%
-                    </span>{" "}
-                    from the predicted {anomaly.predicted.toLocaleString()} L. This may
-                    indicate unusual activity, a recording error, or an external event.
+                    Today's actual sales ({anomaly.actual.toLocaleString()} L)
+                    {anomaly.is_anomaly ? (
+                        <>
+                            {" "}deviate significantly from the 14-day average of{" "}
+                            <span className="font-semibold">{anomaly.moving_avg_14d.toLocaleString()} L</span>
+                            {" "}(Z-Score: <span className="font-bold">{zDisplay}</span>).
+                            This may indicate unusual activity, a recording error, or an external event.
+                        </>
+                    ) : (
+                        <>
+                            {" "}are within the expected range of the 14-day moving
+                            average ({anomaly.moving_avg_14d.toLocaleString()} L).
+                        </>
+                    )}
                 </p>
             </div>
         </div>
