@@ -487,3 +487,56 @@ export function useBanks(activeOnly = true, config?: SWRConfiguration) {
     );
 }
 
+// ============================================================================
+// Intelligence / Forecasting Hooks
+// ============================================================================
+
+import { getAccessToken } from '@/lib/supabase';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+async function forecastingFetcher(url: string) {
+    const token = await getAccessToken();
+    const res = await fetch(`${API_BASE}${url}`, {
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+}
+
+/**
+ * Fetch alerts for a station (unresolved by default)
+ */
+export function useAlerts(stationId: string | null, resolved = false, config?: SWRConfiguration) {
+    return useSWR<any[], Error>(
+        stationId ? `/forecasting/${stationId}/alerts?resolved=${resolved}` : null,
+        (url: string) => forecastingFetcher(url),
+        { ...defaultConfig, refreshInterval: 60000, ...config }
+    );
+}
+
+/**
+ * Trigger the forecasting pipeline for a station (POST mutation)
+ */
+export async function runForecastingPipeline(stationId: string): Promise<any> {
+    const token = await getAccessToken();
+    const res = await fetch(`${API_BASE}/forecasting/${stationId}/run`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+}
+
