@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #1e293b; color: white; padding: 15px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { padding: 20px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; }
+        h2 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; margin-top: 25px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+        th { background-color: #f8fafc; }
+        .total-row { font-weight: bold; background-color: #f1f5f9; }
+        .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SAMI Shift Report</h1>
+            <p>{{ station_name }} | {{ shift_date }} | {{ shift_type | title }} Shift</p>
+        </div>
+        
+        <div class="content">
+            <h2>Financial Summary</h2>
+            <table>
+                <tr>
+                    <th>Total Fuel Sales</th>
+                    <td>LKR {{ "{:,.2f}".format(total_fuel_sales) }}</td>
+                </tr>
+                <tr>
+                    <th>Card Sales</th>
+                    <td>LKR {{ "{:,.2f}".format(total_card_sales) }}</td>
+                </tr>
+                <tr>
+                    <th>Credit Sales</th>
+                    <td>LKR {{ "{:,.2f}".format(total_credit_sales) }}</td>
+                </tr>
+                <tr class="total-row">
+                    <th>Cash Collected</th>
+                    <td>LKR {{ "{:,.2f}".format(cash_collected) }}</td>
+                </tr>
+            </table>
+
+            <h2>Sales Details</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Nozzle</th>
+                        <th>Liters Sold</th>
+                        <th>Amount (LKR)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales %}
+                    <tr>
+                        <td>{{ sale.product_name }}</td>
+                        <td>{{ sale.nozzle_name }}</td>
+                        <td>{{ "{:,.2f}".format(sale.liters_sold) }}</td>
+                        <td>{{ "{:,.2f}".format(sale.amount_lkr) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4">No sales recorded during this shift.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            {% if notes %}
+            <h2>Shift Notes</h2>
+            <p>{{ notes }}</p>
+            {% endif %}
+            
+        </div>
+        
+        <div class="footer">
+            <p>Generated automatically by SAMI - Shed AI Manager Interface</p>
+        </div>
+    </div>
+</body>
+</html>
