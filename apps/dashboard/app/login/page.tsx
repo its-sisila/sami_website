@@ -26,21 +26,51 @@ export default function LoginPage() {
 
         try {
             const supabase = createClient();
+
+            // Abort after 8s so the UI doesn't hang on bad connections
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+
             const { error } = await supabase.auth.signInWithPassword({
                 email: email.trim(),
                 password: password.trim(),
             });
 
+            clearTimeout(timeout);
+
             if (error) {
-                setError(error.message);
+                // Distinguish network errors from auth errors
+                if (
+                    error.message?.includes('fetch') ||
+                    error.message?.includes('network') ||
+                    error.status === 0
+                ) {
+                    setError(
+                        'Unable to reach the authentication server. Please check your internet connection and try again.'
+                    );
+                } else {
+                    setError(error.message);
+                }
                 return;
             }
 
             // Redirect to dashboard on success
             router.push('/dashboard');
             router.refresh();
-        } catch (err) {
-            setError('An unexpected error occurred');
+        } catch (err: any) {
+            // Handle network-level failures (DNS, timeout, offline)
+            if (
+                err?.name === 'AbortError' ||
+                err?.message?.includes('fetch') ||
+                err?.message?.includes('Failed to fetch') ||
+                err?.message?.includes('NetworkError')
+            ) {
+                setError(
+                    'Connection timed out. The authentication server is unreachable — please check your internet connection or try again shortly.'
+                );
+            } else {
+                setError('An unexpected error occurred. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
