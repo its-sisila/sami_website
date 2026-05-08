@@ -88,44 +88,66 @@ export default function IntelligenceDashboard({
     const [data, setData] = useState<ForecastResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isNetworkError, setIsNetworkError] = useState(false);
 
-    // Fetch forecast data
-    useEffect(() => {
-        async function fetchForecast() {
-            setLoading(true);
-            setError(null);
-            try {
-                const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                const token = await getAccessToken();
+    // Fetch forecast data — extracted so the retry button can call it
+    const fetchForecast = React.useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        setIsNetworkError(false);
+        try {
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const token = await getAccessToken();
 
-                const res = await fetch(
-                    `${API_BASE}/forecasting/${stationId}/${productType}`,
-                    {
-                        headers: {
-                            "Content-Type": "application/json",
-                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                        },
-                    }
-                );
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
 
-                if (!res.ok) {
-                    const body = await res.json().catch(() => ({}));
-                    throw new Error(body.detail || `HTTP ${res.status}`);
+            const res = await fetch(
+                `${API_BASE}/forecasting/${stationId}/${productType}`,
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    signal: controller.signal,
                 }
+            );
 
-                const json: ForecastResponse = await res.json();
-                setData(json);
-            } catch (err: any) {
-                setError(err.message ?? "Failed to fetch forecast data");
-            } finally {
-                setLoading(false);
+            clearTimeout(timeout);
+
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.detail || `HTTP ${res.status}`);
             }
-        }
 
+            const json: ForecastResponse = await res.json();
+            setData(json);
+        } catch (err: any) {
+            const msg = err?.message ?? "";
+            const isNetwork =
+                err?.name === "AbortError" ||
+                msg.includes("fetch") ||
+                msg.includes("Failed to fetch") ||
+                msg.includes("NetworkError") ||
+                msg.includes("ECONNREFUSED");
+
+            setIsNetworkError(isNetwork);
+            setError(
+                isNetwork
+                    ? "Unable to reach the forecast server. Please check that the backend is running and your internet connection is stable."
+                    : msg || "Failed to fetch forecast data"
+            );
+        } finally {
+            setLoading(false);
+        }
+    }, [stationId, productType]);
+
+    // Fetch on mount / when station or product changes
+    useEffect(() => {
         if (stationId && productType) {
             fetchForecast();
         }
-    }, [stationId, productType]);
+    }, [stationId, productType, fetchForecast]);
 
     // Merge historical + forecast into a single chart dataset
     const chartData = useMemo(() => {
@@ -192,9 +214,22 @@ export default function IntelligenceDashboard({
 
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center py-24 gap-3">
-                <ShieldAlert className="h-10 w-10 text-rose-400" />
-                <p className="text-sm text-rose-600 font-medium">{error}</p>
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className={`p-3 rounded-full ${isNetworkError ? 'bg-amber-50' : 'bg-rose-50'}`}>
+                    <ShieldAlert className={`h-8 w-8 ${isNetworkError ? 'text-amber-500' : 'text-rose-400'}`} />
+                </div>
+                <div className="text-center max-w-md">
+                    <h4 className={`text-sm font-semibold mb-1 ${isNetworkError ? 'text-amber-700' : 'text-rose-700'}`}>
+                        {isNetworkError ? 'Connection Issue' : 'Forecast Unavailable'}
+                    </h4>
+                    <p className="text-xs text-slate-500">{error}</p>
+                </div>
+                <button
+                    onClick={fetchForecast}
+                    className="mt-2 px-5 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+                >
+                    Retry
+                </button>
             </div>
         );
     }
