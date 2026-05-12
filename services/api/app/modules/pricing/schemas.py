@@ -38,3 +38,19 @@ class PricingDataResponse(BaseModel):
     last_updated: Optional[date] = Field(None, description="Date of last calculation")
     period_days: int = Field(30, description="Number of days used for average")
     data_source: str = Field("investing.com", description="Data source")
+
+
+class MarketNewsItem(BaseModel):
+    """A single news item from the RSS feed."""
+    title: str
+    link: str
+    pubDate: str
+    source: str
+    image_url: Optional[str] = None
+    sentiment: Optional[str] = None  # "bullish", "bearish", "neutral"
+
+
+class MarketNewsResponse(BaseModel):
+    """Response model for market news."""
+    global_news: list[MarketNewsItem]
+    local_news: list[MarketNewsItem]

@@ -1352,6 +1352,14 @@ export const pricing = {
         fetched_at: string;
         errors: string[];
     }>('/pricing/market-snapshot'),
+
+    /**
+     * Get latest market news related to global energy and local Sri Lanka energy.
+     */
+    getMarketNews: () => {
+        // Dynamic import to avoid type issues if not imported at top
+        return request<any>('/pricing/market-news');
+    },
 };
 
 // ============================================================================

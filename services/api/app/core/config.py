@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     supabase_key: str = ""  # anon/public key for client
     supabase_service_key: str = ""  # service role key for admin operations
     
+    # Email / Resend
+    resend_api_key: str = ""
+    
+    
     # JWT (Supabase uses these for token verification)
     jwt_secret: str = ""  # Supabase JWT secret
     jwt_algorithm: str = "HS256"

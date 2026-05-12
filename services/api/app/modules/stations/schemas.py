@@ -53,6 +53,7 @@ class StationSettingsRead(BaseModel):
     station_id: UUID
     late_arrival_threshold: int
     early_departure_threshold: int
+    shift_report_emails: str | None = None
     created_at: datetime
     updated_at: datetime
     
@@ -63,3 +64,4 @@ class StationSettingsUpdate(BaseModel):
     """Schema for updating station settings."""
     late_arrival_threshold: int | None = None
     early_departure_threshold: int | None = None
+    shift_report_emails: str | None = None

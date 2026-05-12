@@ -129,8 +129,33 @@ async def lifespan(app: FastAPI):
     print(f"Starting {settings.app_name}...")
 
     # Create tables if they don't exist (dev mode convenience)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Retry with exponential backoff so transient network hiccups don't crash the app
+    MAX_DB_RETRIES = 3
+    db_connected = False
+    for attempt in range(1, MAX_DB_RETRIES + 1):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            db_connected = True
+            logger.info("[Startup] Database connected successfully.")
+            break
+        except Exception as e:
+            wait_seconds = 2 ** attempt
+            logger.warning(
+                f"[Startup] DB connection attempt {attempt}/{MAX_DB_RETRIES} failed: {e}"
+            )
+            if attempt < MAX_DB_RETRIES:
+                logger.info(f"[Startup] Retrying in {wait_seconds}s...")
+                await asyncio.sleep(wait_seconds)
+            else:
+                logger.error(
+                    "[Startup] Could not reach database after %d attempts. "
+                    "Starting in degraded mode — data endpoints will return 503.",
+                    MAX_DB_RETRIES,
+                )
+
+    # Store DB status on the app so health checks can report it
+    app.state.db_connected = db_connected
 
     # Start nightly forecasting scheduler
     scheduler.add_job(
@@ -199,7 +224,12 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "service": settings.app_name}
+    db_ok = getattr(app.state, "db_connected", False)
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "service": settings.app_name,
+        "database": "connected" if db_ok else "unreachable",
+    }
 
 
 

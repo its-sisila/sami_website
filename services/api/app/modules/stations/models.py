@@ -54,6 +54,9 @@ class StationSettings(Base):
     late_arrival_threshold: Mapped[int] = mapped_column(default=10)  # Minutes after shift start
     early_departure_threshold: Mapped[int] = mapped_column(default=30)  # Minutes before shift end
     
+    # Email Reports
+    shift_report_emails: Mapped[str | None] = mapped_column(String(500))  # Comma-separated email addresses
+    
     # Future: Add more settings as needed
     # low_stock_threshold: Mapped[int] = mapped_column(default=30)  # Percent
     

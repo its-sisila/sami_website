@@ -146,7 +146,7 @@ class TestEndpointAuthentication:
         """Health check endpoint should be publicly accessible."""
         response = await async_client.get("/health")
         assert response.status_code == 200
-        assert response.json()["status"] == "ok"
+        assert response.json()["status"] in ["ok", "degraded"]
 
     @pytest.mark.asyncio
     async def test_root_endpoint_no_auth_required(self, async_client):

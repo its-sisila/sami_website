@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2, Activity, Globe, BarChart3 } from "lucide-react";
+import { Calculator, TrendingUp, DollarSign, Percent, RefreshCw, Sparkles, AlertTriangle, TrendingDown, Loader2, Activity, Globe, BarChart3, Newspaper, ExternalLink, MapPin, Minus, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
     calculateFuelPrice,
     formatCurrency,
@@ -15,6 +17,7 @@ import {
 } from "@/lib/pricing-formula";
 import { usePricingData } from "@/lib/hooks/use-pricing-data";
 import api from "@/lib/api/client";
+import WorldGlobe from "@/components/ui/WorldGlobe";
 
 const AI_DEFAULT_PROMPT =
     "Based on current global MOPS and LKR rates, what is your inventory recommendation for Petrol 92 and Diesel for the upcoming week?";
@@ -34,8 +37,8 @@ function getAdviceSentiment(advice: string): "warning" | "calm" | "neutral" {
 
 const SENTIMENT_STYLES = {
     warning: {
-        border: "border-amber-500/40",
-        bg: "bg-gradient-to-br from-amber-950/60 via-amber-900/30 to-slate-900/80",
+        border: "border-amber-500/30",
+        bg: "bg-slate-900/60 backdrop-blur-md",
         glow: "shadow-amber-500/10",
         icon: <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />,
         badge: "bg-amber-500/20 text-amber-300 border-amber-500/30",
@@ -43,22 +46,22 @@ const SENTIMENT_STYLES = {
         accentBar: "bg-amber-500",
     },
     calm: {
-        border: "border-sky-500/40",
-        bg: "bg-gradient-to-br from-sky-950/60 via-sky-900/30 to-slate-900/80",
+        border: "border-sky-500/30",
+        bg: "bg-slate-900/60 backdrop-blur-md",
         glow: "shadow-sky-500/10",
         icon: <TrendingDown className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />,
         badge: "bg-sky-500/20 text-sky-300 border-sky-500/30",
-        badgeText: "Market Declining",
+        badgeText: "Favorable conditions",
         accentBar: "bg-sky-500",
     },
     neutral: {
-        border: "border-slate-600/40",
-        bg: "bg-gradient-to-br from-slate-800/60 via-slate-900/30 to-slate-900/80",
-        glow: "shadow-slate-500/5",
-        icon: <Sparkles className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />,
-        badge: "bg-red-500/20 text-red-300 border-red-500/30",
+        border: "border-slate-600/30",
+        bg: "bg-slate-900/60 backdrop-blur-md",
+        glow: "shadow-none",
+        icon: <Minus className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />,
+        badge: "bg-slate-800 text-slate-300 border-slate-700",
         badgeText: "Market Stable",
-        accentBar: "bg-red-500",
+        accentBar: "bg-slate-500",
     },
 } as const;
 
@@ -86,23 +89,158 @@ export default function PricingPage() {
     const [analystAdvice, setAnalystAdvice] = useState<string | null>(null);
     const [analystLoading, setAnalystLoading] = useState(false);
     const [analystError, setAnalystError] = useState<string | null>(null);
+    const [isCopied, setIsCopied] = useState(false);
+    const [isLocalFallback, setIsLocalFallback] = useState(false);
+
+    // Generate a local, formula-based advice report using FRESHLY SCRAPED live data
+    const generateLocalFallbackAdvice = (snapshot?: {
+        mogas_92_price: number | null;
+        gasoil_price: number | null;
+        exchange_rate: number | null;
+        crude_oil_price: number | null;
+        fetched_at: string;
+    }): string => {
+        // Use fresh snapshot data first, then DB data, then user inputs as last resort
+        const liveExchangeRate = snapshot?.exchange_rate ?? pricingData?.exchange_rate ?? inputs.exchangeRate;
+        const liveMogasPrice   = snapshot?.mogas_92_price ?? pricingData?.mogas_92_average ?? inputs.mopsPrice;
+        const liveGasoilPrice  = snapshot?.gasoil_price ?? pricingData?.gasoil_average ?? inputs.mopsPrice;
+        const liveCrudePrice   = snapshot?.crude_oil_price ?? null;
+        const livePremium      = inputs.premium > 0 ? inputs.premium : 3.5;
+        const fetchedAt        = snapshot?.fetched_at ?? null;
+
+        const hasData = liveExchangeRate > 0 && (liveMogasPrice > 0 || liveGasoilPrice > 0);
+
+        if (!hasData) {
+            return [
+                "## ⚡ Formula Price Analysis",
+                "",
+                "The AI analyst is temporarily unavailable and live market data could not be fetched.",
+                "Please click **Use Live Data** or enter the MOPS Price and Exchange Rate manually, then try again.",
+            ].join("\n");
+        }
+
+        // Calculate for BOTH fuel types using live scraped prices
+        const txOverrides = {
+            customsDuty: taxOverrides.customsDuty === '' ? 0 : taxOverrides.customsDuty,
+            exciseDuty:  taxOverrides.exciseDuty  === '' ? 0 : taxOverrides.exciseDuty,
+            palLevy:     taxOverrides.palLevy     === '' ? 0 : taxOverrides.palLevy,
+            ssclRate:    taxOverrides.ssclRate    === '' ? 0 : taxOverrides.ssclRate,
+        };
+
+        const calcPetrol = calculateFuelPrice({
+            fuelType: 'petrol_92',
+            mopsPrice: liveMogasPrice,
+            premium: livePremium,
+            exchangeRate: liveExchangeRate,
+            taxOverrides: txOverrides,
+        });
+
+        const calcDiesel = calculateFuelPrice({
+            fuelType: 'diesel',
+            mopsPrice: liveGasoilPrice,
+            premium: livePremium,
+            exchangeRate: liveExchangeRate,
+            taxOverrides: txOverrides,
+        });
+
+        // Inventory recommendation based on MOPS thresholds
+        const calcForReco  = inputs.fuelType === 'petrol_92' ? calcPetrol : calcDiesel;
+        const mopsForReco  = inputs.fuelType === 'petrol_92' ? liveMogasPrice : liveGasoilPrice;
+        const threshHigh   = inputs.fuelType === 'diesel' ? 85 : 90;
+        const threshLow    = inputs.fuelType === 'diesel' ? 70 : 75;
+        const landedShare  = calcForReco.v1_landedCost / calcForReco.mrp;
+        const taxShare     = calcForReco.v4_taxation   / calcForReco.mrp;
+
+        let stockReco: string;
+        let rationale: string;
+        if (mopsForReco > threshHigh) {
+            stockReco = "🔴 **Stock Up** — MOPS is elevated. Consider placing a full order now before costs rise further.";
+            rationale = `MOPS is at **$${mopsForReco.toFixed(2)}/bbl**, above the $${threshHigh}/bbl alert threshold. Landed cost is **${(landedShare * 100).toFixed(1)}%** of MRP.`;
+        } else if (mopsForReco < threshLow) {
+            stockReco = "🟢 **Run Down Stocks** — prices are in a soft range. You can afford to delay re-ordering slightly.";
+            rationale = `MOPS is at **$${mopsForReco.toFixed(2)}/bbl**, below the $${threshLow}/bbl low threshold — a buyer-friendly market.`;
+        } else {
+            stockReco = "🟡 **Hold** — market is in a neutral range. Maintain your normal ordering schedule.";
+            rationale = `MOPS is at **$${mopsForReco.toFixed(2)}/bbl**, within the normal $${threshLow}–$${threshHigh}/bbl band.`;
+        }
+
+        const dataSource = snapshot ? "live scraped prices" : pricingData ? "database averages (may be outdated)" : "user-entered inputs";
+
+        return [
+            "## ⚡ Formula Price Analysis",
+            "",
+            `> *AI analyst unavailable. Calculated using ${dataSource}.*`,
+            "",
+            "### Calculated MRP",
+            `| Fuel Type   | MOPS (USD/bbl) | MRP (LKR/L) | Landed Cost | Taxes |`,
+            `|-------------|---------------|-------------|-------------|-------|`,
+            `| **Petrol 92** | $${liveMogasPrice.toFixed(2)} | **Rs. ${calcPetrol.mrp.toFixed(2)}** | Rs. ${calcPetrol.v1_landedCost.toFixed(2)} | Rs. ${calcPetrol.v4_taxation.toFixed(2)} |`,
+            `| **Diesel**    | $${liveGasoilPrice.toFixed(2)} | **Rs. ${calcDiesel.mrp.toFixed(2)}** | Rs. ${calcDiesel.v1_landedCost.toFixed(2)} | Rs. ${calcDiesel.v4_taxation.toFixed(2)} |`,
+            "",
+            "### Cost Breakdown (selected fuel)",
+            `- **Landed Cost (V1):** Rs. ${calcForReco.v1_landedCost.toFixed(2)}/L — ${(landedShare * 100).toFixed(1)}% of MRP`,
+            `- **Processing & Admin (V2+V3):** Rs. ${(calcForReco.v2_processingCost + calcForReco.v3_adminCost).toFixed(2)}/L`,
+            `- **Finance Surcharge:** Rs. ${calcForReco.financeSurcharge.toFixed(2)}/L`,
+            `- **Total Taxation (V4):** Rs. ${calcForReco.v4_taxation.toFixed(2)}/L — ${(taxShare * 100).toFixed(1)}% of MRP`,
+            "",
+            liveCrudePrice ? `> Brent Crude: **$${liveCrudePrice.toFixed(2)}/bbl**` : "",
+            "",
+            "### Inventory Recommendation",
+            stockReco,
+            "",
+            rationale,
+            "",
+            "### Data Sources",
+            `- Exchange Rate: **Rs. ${liveExchangeRate.toFixed(2)}/USD**`,
+            `- Premium: **$${livePremium.toFixed(2)}/bbl**`,
+            fetchedAt ? `- Fetched at: **${new Date(fetchedAt).toLocaleString()}**` : "",
+        ].filter(Boolean).join("\n");
+    };
+
+    const handleCopyAdvice = async () => {
+        if (!analystAdvice) return;
+        try {
+            await navigator.clipboard.writeText(analystAdvice);
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+            toast.success("Advice copied to clipboard");
+        } catch (err) {
+            toast.error("Failed to copy advice");
+        }
+    };
 
     const handleAskAnalyst = async () => {
         setAnalystLoading(true);
         setAnalystAdvice(null);
         setAnalystError(null);
+        setIsLocalFallback(false);
         try {
             const { advice } = await api.pricing.askAnalyst(AI_DEFAULT_PROMPT);
+            
+            // Check if the AI returned a raw JSON error string instead of actual advice
+            if (typeof advice === 'string' && advice.trim().startsWith('{') && advice.includes('"error"')) {
+                let parsed: { error?: { message?: string } } | null = null;
+                try {
+                    parsed = JSON.parse(advice);
+                } catch {
+                    // Not valid JSON — treat it as normal advice text
+                }
+                if (parsed?.error) {
+                    throw new Error(parsed.error.message || "The AI model is temporarily unavailable.");
+                }
+            }
+
             setAnalystAdvice(advice);
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : "Failed to get AI advice";
-            // Show user-friendly messages based on error type
-            if (message.includes("503") || message.includes("high demand")) {
-                setAnalystError("The AI model is currently experiencing high demand. This is usually temporary — please try again in a minute.");
-            } else if (message.includes("502") || message.includes("unavailable")) {
-                setAnalystError("The AI analyst is temporarily unavailable. Please try again shortly.");
-            } else {
-                setAnalystError(message);
+            // AI unavailable — fetch fresh live data and fall back to formula-based analysis
+            toast.info("AI analyst is busy. Fetching live prices for formula analysis...");
+            setIsLocalFallback(true);
+            try {
+                const snapshot = await api.pricing.getMarketSnapshot();
+                setAnalystAdvice(generateLocalFallbackAdvice(snapshot));
+            } catch {
+                // If even the scraper fails, use whatever data we have
+                setAnalystAdvice(generateLocalFallbackAdvice());
             }
         } finally {
             setAnalystLoading(false);
@@ -137,6 +275,50 @@ export default function PricingPage() {
     const handleFetchMarket = async () => {
         setMarketFetched(true);
         await refetchMarket();
+    };
+
+    // ----- Market News state (auto-fetch, backend has 15-min cache) -----
+    const { data: marketNews, isLoading: newsLoading, mutate: refetchNews } = useSWR(
+        '/pricing/market-news',
+        api.pricing.getMarketNews,
+        {
+            revalidateOnFocus: false,
+            revalidateOnReconnect: false,
+            refreshInterval: 0,
+            revalidateOnMount: true,
+        }
+    );
+    const [newsFetched, setNewsFetched] = useState(false);
+    const [activeNewsTab, setActiveNewsTab] = useState<'local' | 'global'>('local');
+
+    const handleFetchNews = async () => {
+        setNewsFetched(true);
+        try {
+            await refetchNews();
+            toast.success('Market news refreshed');
+        } catch {
+            toast.error('Failed to refresh news');
+        }
+    };
+
+    // Helper to format date
+    const getRelativeTimeString = (dateStr: string) => {
+        try {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffInMs = now.getTime() - date.getTime();
+            const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+            const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+            
+            if (diffInHours < 1) return 'Just now';
+            if (diffInHours < 24) {
+                return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
+            } else {
+                return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`;
+            }
+        } catch(e) {
+            return dateStr;
+        }
     };
 
     const handleInputChange = (field: keyof PricingInputs, value: string | FuelType) => {
@@ -209,6 +391,39 @@ export default function PricingPage() {
                     </p>
                 </div>
 
+                {/* ── Scrolling News Ticker ── */}
+                {marketNews && (marketNews.global_news?.length > 0 || marketNews.local_news?.length > 0) && (
+                    <div className="mb-6 overflow-hidden rounded-lg bg-slate-900/60 border border-slate-800 py-2.5 px-4">
+                        <div className="flex animate-marquee whitespace-nowrap gap-12">
+                            {[...( marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
+                                <span key={i} className="inline-flex items-center gap-2 text-xs text-slate-300">
+                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                        item.sentiment === 'bullish' ? 'bg-emerald-400' :
+                                        item.sentiment === 'bearish' ? 'bg-red-400' :
+                                        'bg-slate-500'
+                                    }`} />
+                                    <span className="font-medium">{item.source}</span>
+                                    <span className="text-slate-500">|</span>
+                                    <span>{item.title?.length > 80 ? item.title.slice(0, 80) + '…' : item.title}</span>
+                                </span>
+                            ))}
+                            {/* Duplicate for seamless loop */}
+                            {[...(marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
+                                <span key={`dup-${i}`} className="inline-flex items-center gap-2 text-xs text-slate-300">
+                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                        item.sentiment === 'bullish' ? 'bg-emerald-400' :
+                                        item.sentiment === 'bearish' ? 'bg-red-400' :
+                                        'bg-slate-500'
+                                    }`} />
+                                    <span className="font-medium">{item.source}</span>
+                                    <span className="text-slate-500">|</span>
+                                    <span>{item.title?.length > 80 ? item.title.slice(0, 80) + '…' : item.title}</span>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* ── AI Market Analyst Section ── */}
                 <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
                     {/* Top accent bar */}
@@ -277,16 +492,45 @@ export default function PricingPage() {
                                     <div className="flex items-start gap-3">
                                         {styles.icon}
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span
-                                                    className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border ${styles.badge}`}
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="flex items-center gap-2">
+                                                    <span
+                                                        className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border ${styles.badge}`}
+                                                    >
+                                                        {styles.badgeText}
+                                                    </span>
+                                                    {isLocalFallback && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-slate-600 bg-slate-800 text-slate-400">
+                                                            <Calculator className="w-2.5 h-2.5" />
+                                                            Formula Mode
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <button 
+                                                    onClick={handleCopyAdvice}
+                                                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors"
+                                                    title="Copy to clipboard"
                                                 >
-                                                    {styles.badgeText}
-                                                </span>
+                                                    {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                                                </button>
                                             </div>
-                                            <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">
-                                                {analystAdvice}
-                                            </p>
+                                            <div className="text-sm leading-relaxed text-slate-200">
+                                                <ReactMarkdown 
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        p: ({node, ...props}) => <p className="mb-4 last:mb-0" {...props} />,
+                                                        strong: ({node, ...props}) => <strong className="font-semibold text-white" {...props} />,
+                                                        ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-1" {...props} />,
+                                                        ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-1" {...props} />,
+                                                        li: ({node, ...props}) => <li className="text-slate-300" {...props} />,
+                                                        h1: ({node, ...props}) => <h1 className="text-lg font-bold text-white mb-2 mt-4" {...props} />,
+                                                        h2: ({node, ...props}) => <h2 className="text-base font-bold text-white mb-2 mt-4" {...props} />,
+                                                        h3: ({node, ...props}) => <h3 className="text-sm font-bold text-white mb-2 mt-3" {...props} />,
+                                                    }}
+                                                >
+                                                    {analystAdvice}
+                                                </ReactMarkdown>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -516,6 +760,174 @@ export default function PricingPage() {
                     </div>
                 </div>
                 {/* ── End Live Market Data Section ── */}
+
+                {/* ── Market News Section ── */}
+                <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-500" />
+                    <div className="p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+                                    <Newspaper className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-semibold text-white tracking-tight">
+                                        Energy Market News
+                                    </h2>
+                                    <p className="text-xs text-slate-500">
+                                        AI-Powered Sentiment &bull; Global &amp; Local Updates
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                onClick={handleFetchNews}
+                                disabled={newsLoading}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {newsLoading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Fetching…
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="w-4 h-4 mr-2" />
+                                        Refresh News
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+
+                        {/* Tabs — always visible */}
+                        <div className="mb-4 border-b border-slate-800">
+                            <div className="flex space-x-4">
+                                <button
+                                    onClick={() => setActiveNewsTab('local')}
+                                    className={`pb-3 text-sm font-medium transition-colors relative ${activeNewsTab === 'local' ? 'text-blue-400' : 'text-slate-400 hover:text-slate-300'}`}
+                                >
+                                    <span className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Sri Lanka</span>
+                                    {activeNewsTab === 'local' && (
+                                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full" />
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setActiveNewsTab('global')}
+                                    className={`pb-3 text-sm font-medium transition-colors relative ${activeNewsTab === 'global' ? 'text-blue-400' : 'text-slate-400 hover:text-slate-300'}`}
+                                >
+                                    <span className="flex items-center gap-2"><Globe className="w-4 h-4" /> Global</span>
+                                    {activeNewsTab === 'global' && (
+                                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full" />
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Loading skeleton */}
+                        {newsLoading && (
+                            <div className="space-y-4 animate-pulse mt-4">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30 flex gap-4">
+                                        <div className="w-16 h-16 bg-slate-700/50 rounded-lg shrink-0" />
+                                        <div className="flex-1 space-y-3">
+                                            <div className="h-4 bg-slate-700/60 rounded-full w-3/4" />
+                                            <div className="flex gap-4">
+                                                <div className="h-3 bg-slate-700/40 rounded-full w-1/4" />
+                                                <div className="h-3 bg-slate-700/30 rounded-full w-1/4" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* News content */}
+                        {marketNews && !newsLoading && (
+                            <div className="mt-4">
+                                {/* Globe — shown above news on Global tab */}
+                                {activeNewsTab === 'global' && (
+                                    <div className="flex justify-center mb-6">
+                                        <WorldGlobe size={280} />
+                                    </div>
+                                )}
+
+                                {/* News list */}
+                                <div className="space-y-3">
+                                    {(activeNewsTab === 'local' ? marketNews.local_news : marketNews.global_news)?.map((item: any, i: number) => (
+                                        <a
+                                            key={i}
+                                            href={item.link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="group flex gap-4 bg-slate-800/40 border border-slate-700/50 hover:border-blue-500/50 rounded-xl p-4 transition-all duration-300 hover:shadow-lg hover:shadow-blue-900/20"
+                                        >
+                                            {/* Thumbnail or gradient placeholder */}
+                                            {item.image_url ? (
+                                                <img
+                                                    src={item.image_url}
+                                                    alt=""
+                                                    className="w-16 h-16 rounded-lg object-cover shrink-0 border border-slate-700/50"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                />
+                                            ) : (
+                                                <div className="w-16 h-16 rounded-lg shrink-0 bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border border-slate-700/50 flex items-center justify-center">
+                                                    <Newspaper className="w-5 h-5 text-slate-600" />
+                                                </div>
+                                            )}
+
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="text-sm font-medium text-slate-200 group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug mb-2">
+                                                    {item.title}
+                                                </h3>
+                                                <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium flex-wrap">
+                                                    <span className="bg-slate-900/50 px-2 py-0.5 rounded text-slate-400">{item.source}</span>
+                                                    <span>•</span>
+                                                    <span>{getRelativeTimeString(item.pubDate)}</span>
+
+                                                    {/* Sentiment badge */}
+                                                    {item.sentiment && item.sentiment !== 'neutral' && (
+                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider ${
+                                                            item.sentiment === 'bullish'
+                                                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                                                : 'bg-red-500/15 text-red-300 border-red-500/30'
+                                                        }`}>
+                                                            {item.sentiment === 'bullish' ? (
+                                                                <><TrendingUp className="w-3 h-3" /> Bullish</>
+                                                            ) : (
+                                                                <><TrendingDown className="w-3 h-3" /> Bearish</>
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                    {item.sentiment === 'neutral' && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider bg-slate-500/15 text-slate-400 border-slate-500/30">
+                                                            <Minus className="w-3 h-3" /> Neutral
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <ExternalLink className="w-4 h-4 text-slate-600 group-hover:text-blue-400 shrink-0 transition-colors mt-1" />
+                                        </a>
+                                    ))}
+                                    {(activeNewsTab === 'local' ? marketNews.local_news : marketNews.global_news)?.length === 0 && (
+                                        <div className="text-center py-6 text-sm text-slate-500">
+                                            No recent news found for this category.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Empty state */}
+                        {!marketNews && !newsLoading && (
+                            <div className="flex items-center gap-2 text-xs text-slate-600 mt-2">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Loading market news…
+                            </div>
+                        )}
+                    </div>
+                </div>
+                {/* ── End Market News Section ── */}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Input Panel */}

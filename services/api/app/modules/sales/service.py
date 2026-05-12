@@ -513,7 +513,8 @@ async def complete_shift(
     shift_id: UUID,
     payload: ShiftCompletePayload,
     completed_by: UUID | None,
-    db: AsyncSession
+    db: AsyncSession,
+    background_tasks=None
 ) -> dict:
     """
     Complete a shift by saving all sales data transactionally.
@@ -597,11 +598,59 @@ async def complete_shift(
     # Flush all changes
     await db.flush()
     
-    # Calculate totals
-    total_fuel_sales = sum(s.amount_lkr for s in saved_sales)
-    total_card_sales = sum(c.amount for c in saved_card_sales)
-    total_credit_sales = sum(c.amount for c in saved_credit_sales)
-    
+    # 5. Dispatch Email Report Task
+    if background_tasks:
+        from app.modules.stations.models import StationSettings, Station
+        from app.modules.inventory.models import Nozzle, FuelProduct
+        from app.core.email import send_shift_report_email
+
+        # Fetch station settings to get email configurations
+        station_stmt = select(Station, StationSettings).outerjoin(
+            StationSettings, Station.id == StationSettings.station_id
+        ).where(Station.id == shift.station_id)
+        station_res = await db.execute(station_stmt)
+        station_row = station_res.first()
+
+        if station_row and station_row.StationSettings and station_row.StationSettings.shift_report_emails:
+            emails_str = station_row.StationSettings.shift_report_emails
+            to_emails = [e.strip() for e in emails_str.split(",") if e.strip()]
+
+            if to_emails:
+                # Gather sales details with names
+                sales_details = []
+                for s in saved_sales:
+                    # Fetch nozzle and product name
+                    np_stmt = select(Nozzle.nozzle_name, FuelProduct.name).join(
+                        FuelProduct, Nozzle.product_id == FuelProduct.id
+                    ).where(Nozzle.id == s.nozzle_id)
+                    np_res = await db.execute(np_stmt)
+                    np_row = np_res.first()
+                    if np_row:
+                        sales_details.append({
+                            "product_name": np_row.name,
+                            "nozzle_name": np_row.nozzle_name,
+                            "liters_sold": s.liters_sold,
+                            "amount_lkr": s.amount_lkr
+                        })
+
+                report_data = {
+                    "total_fuel_sales": float(total_fuel_sales),
+                    "total_card_sales": float(total_card_sales),
+                    "total_credit_sales": float(total_credit_sales),
+                    "cash_collected": float(payload.cash_collected) if payload.cash_collected else 0,
+                    "sales": sales_details,
+                    "notes": payload.notes
+                }
+
+                background_tasks.add_task(
+                    send_shift_report_email,
+                    to_emails=to_emails,
+                    station_name=station_row.Station.name,
+                    shift_date=str(shift.shift_date),
+                    shift_type=shift.shift_type.value,
+                    report_data=report_data
+                )
+
     return {
         "shift_id": str(shift_id),
         "sales_count": len(saved_sales),

@@ -148,6 +148,7 @@ export default function AdminPage() {
         }
         return station;
     }, [stations, selectedStationId, supportAccess]);
+    useEffect(() => {
         if (!selectedStationId) {
             setProducts([]);
             setTanks([]);
@@ -194,6 +195,7 @@ export default function AdminPage() {
         };
 
         fetchConfigData();
+    }, [selectedStationId]);
     // System Admin Access Control
     useEffect(() => {
         if (!userLoading && currentUser && currentUser.role !== 'system_admin') {

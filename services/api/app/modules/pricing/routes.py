@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user, CurrentUser
-from app.modules.pricing.schemas import PricingDataResponse
+from app.modules.pricing.schemas import PricingDataResponse, MarketNewsResponse
 from app.modules.pricing.service import get_latest_pricing_data, refresh_all_pricing_data
 from app.modules.pricing.agent import market_analyst
 from app.modules.pricing.scrapers.barchart_scraper import scrape_barchart_price
@@ -161,6 +161,18 @@ async def ask_analyst(
         except Exception as e:
             last_error = e
             error_str = str(e)
+
+            # Network-level failures (DNS, connection refused) — no point retrying
+            is_network_error = (
+                "getaddrinfo" in error_str
+                or "ConnectionError" in error_str
+                or "ConnectError" in error_str
+                or "Name or service not known" in error_str
+            )
+            if is_network_error:
+                logger.warning("Gemini API unreachable (network error): %s", error_str)
+                break
+
             is_retryable = "503" in error_str or "UNAVAILABLE" in error_str or "overloaded" in error_str.lower()
 
             if is_retryable and attempt < max_retries:
@@ -267,3 +279,19 @@ async def get_market_snapshot(
 
     result.errors = errors
     return result
+
+
+@router.get("/market-news", response_model=MarketNewsResponse)
+async def get_market_news(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    Fetch the latest market news related to global energy and local Sri Lanka energy.
+    """
+    try:
+        from app.modules.pricing.scrapers.news_scraper import get_latest_market_news
+        news_data = get_latest_market_news()
+        return MarketNewsResponse(**news_data)
+    except Exception as e:
+        logger.error(f"Error fetching market news: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch market news")
