@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import resend
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.core.config import settings
 
@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 template_dir = Path(__file__).parent.parent / "templates" / "email"
 # Ensure the directory exists
 template_dir.mkdir(parents=True, exist_ok=True)
-env = Environment(loader=FileSystemLoader(str(template_dir)))
+env = Environment(
+    loader=FileSystemLoader(str(template_dir)),
+    autoescape=select_autoescape(['html', 'xml'])
+)
 
 
 def send_email(to_emails: list[str], subject: str, html_body: str) -> bool:

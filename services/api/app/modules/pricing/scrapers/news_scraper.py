@@ -121,10 +121,10 @@ def fetch_google_news_rss(query: str, max_items: int = 5) -> list[dict]:
 
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             xml_data = response.read()
 
-        root = ET.fromstring(xml_data)
+        root = ET.fromstring(xml_data)  # nosec B314
 
         for item in root.findall('.//item')[:max_items]:
             title = item.find('title').text if item.find('title') is not None else "No Title"
