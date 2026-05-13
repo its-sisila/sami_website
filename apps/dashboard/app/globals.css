@@ -114,3 +114,73 @@ input[type=number] {
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+/* ── Premium Financial Terminal Utilities ── */
+
+/* Stagger fade-in for breakdown rows */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+/* Subtle MRP glow pulse */
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px 0 rgba(245, 158, 11, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 30px 5px rgba(245, 158, 11, 0.15);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+/* Gold shimmer sweep for calculate button */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.btn-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Terminal scan-line effect for ticker */
+.ticker-scanline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(245, 158, 11, 0.015) 2px,
+    rgba(245, 158, 11, 0.015) 4px
+  );
+}
+
+/* Monospace financial numbers */
+.font-financial {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
