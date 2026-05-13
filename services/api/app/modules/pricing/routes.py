@@ -18,6 +18,7 @@ from app.modules.pricing.agent import market_analyst
 from app.modules.pricing.scrapers.barchart_scraper import scrape_barchart_price
 from app.modules.pricing.scrapers.investing_scraper import scrape_investing_historical_prices
 from app.modules.pricing.scrapers.exchange_scraper import scrape_exchange_rate
+from app.modules.pricing.api_clients import get_exchange_rate_history, get_brent_crude_history
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +64,12 @@ class MarketSnapshotResponse(BaseModel):
     # Exchange rate
     exchange_rate: Optional[float] = Field(None, description="USD/LKR rate")
     exchange_source: Optional[str] = None
+    exchange_rate_history: List[MarketPricePoint] = Field(default_factory=list)
 
     # Crude oil (Brent)
     crude_oil_price: Optional[float] = Field(None, description="Brent crude oil price (USD/barrel)")
     crude_oil_source: Optional[str] = None
+    crude_oil_history: List[MarketPricePoint] = Field(default_factory=list)
 
     fetched_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
     errors: List[str] = Field(default_factory=list)
@@ -259,21 +262,29 @@ async def get_market_snapshot(
 
     # 3. USD/LKR Exchange Rate
     try:
-        result.exchange_rate = scrape_exchange_rate()
-        result.exchange_source = "Yahoo Finance"
+        current_rate, rate_history, source = await get_exchange_rate_history(days=365)
+        if current_rate is not None:
+            result.exchange_rate = current_rate
+            result.exchange_source = source
+            result.exchange_rate_history = [
+                MarketPricePoint(date=d["date"], price=d["price"]) for d in rate_history
+            ]
+        else:
+            errors.append("Exchange rate: No data available from API or fallback")
     except Exception as e:
         errors.append(f"Exchange rate: {e}")
 
-    # 4. Brent Crude Oil — yfinance
+    # 4. Brent Crude Oil
     try:
-        import yfinance as yf
-        brent = yf.Ticker("BZ=F")
-        hist = brent.history(period="1d")
-        if not hist.empty:
-            result.crude_oil_price = round(float(hist["Close"].iloc[-1]), 2)
-            result.crude_oil_source = "Yahoo Finance (Brent)"
+        current_brent, brent_history, source = await get_brent_crude_history(days=365)
+        if current_brent is not None:
+            result.crude_oil_price = current_brent
+            result.crude_oil_source = source
+            result.crude_oil_history = [
+                MarketPricePoint(date=d["date"], price=d["price"]) for d in brent_history
+            ]
         else:
-            errors.append("Brent crude: No data available")
+            errors.append("Brent crude: No data available from API or fallback")
     except Exception as e:
         errors.append(f"Brent crude: {e}")
 
