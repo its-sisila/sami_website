@@ -106,55 +106,103 @@ def _analyse_sentiments(headlines: list[str]) -> list[str]:
         return fallback
 
 
-# ---------------------------------------------------------------------------
-# RSS Fetching
-# ---------------------------------------------------------------------------
-def fetch_google_news_rss(query: str, max_items: int = 5) -> list[dict]:
+def fetch_gnews(query: str, api_key: str, max_items: int = 5) -> list[dict]:
     """
-    Fetch and parse Google News RSS for a specific query.
-    Returns a list of dicts with title, link, pubDate, source, and image_url.
+    Fetch structured news from GNews API.
+    Works in production without bot blocks.
     """
-    encoded_query = urllib.parse.quote(f"{query} when:7d")
-    url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
-
     news_items = []
+    
+    # URL encode the query
+    encoded_query = urllib.parse.quote(query)
+    url = f"https://gnews.io/api/v4/search?q={encoded_query}&lang=en&max={max_items}&apikey={api_key}"
 
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
-            xml_data = response.read()
+        import httpx
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(url)
+            response.raise_for_status()
+            data = response.json()
+
+        articles = data.get("articles", [])
+        logger.info(f"GNews API SUCCESS: Fetched {len(articles)} articles.")
+
+        for article in articles:
+            news_items.append({
+                "title": article.get("title", "No Title"),
+                "link": article.get("url", ""),
+                "pubDate": article.get("publishedAt", ""),
+                "source": article.get("source", {}).get("name", "GNews API"),
+                "image_url": article.get("image"),
+                "sentiment": None,  # filled later by AI
+            })
+
+    except Exception as e:
+        error_msg = str(e)
+        if hasattr(e, 'response') and e.response is not None:
+            error_msg = f"{e} - Response Body: {e.response.text}"
+        logger.error(f"GNews API ERROR for query '{query}': {error_msg}")
+
+    return news_items
+
+
+    return news_items
+
+
+# ---------------------------------------------------------------------------
+# RSS Fallback (No API Key Required)
+# ---------------------------------------------------------------------------
+def fetch_official_rss(url: str, keywords: list[str], source_name: str) -> list[dict]:
+    """
+    Fetch and parse a standard RSS feed as a fallback.
+    Filters items based on keywords in title or description.
+    """
+    news_items = []
+    try:
+        import httpx
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        }
+        with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+            response = client.get(url, headers=headers)
+            response.raise_for_status()
+            xml_data = response.text
 
         root = ET.fromstring(xml_data)  # nosec B314
 
-        for item in root.findall('.//item')[:max_items]:
-            title = item.find('title').text if item.find('title') is not None else "No Title"
-            link = item.find('link').text if item.find('link') is not None else ""
-            pub_date_str = item.find('pubDate').text if item.find('pubDate') is not None else ""
-            source = item.find('source').text if item.find('source') is not None else "Google News"
-
-            # Try to extract image from description
+        for item in root.findall('.//item'):
+            title_el = item.find('title')
             desc_el = item.find('description')
-            desc_html = desc_el.text if desc_el is not None else ""
-            image_url = _extract_image_url(desc_html)
-
-            # Clean up title
-            if f" - {source}" in title:
-                title = title.replace(f" - {source}", "")
+            
+            title = title_el.text if title_el is not None and title_el.text else ""
+            desc = desc_el.text if desc_el is not None and desc_el.text else ""
+            
+            # Check keywords (case-insensitive)
+            content = (title + " " + desc).lower()
+            if not any(kw.lower() in content for kw in keywords):
+                continue
+                
+            link_el = item.find('link')
+            link = link_el.text if link_el is not None and link_el.text else ""
+            
+            pub_date_el = item.find('pubDate')
+            pub_date_str = pub_date_el.text if pub_date_el is not None and pub_date_el.text else ""
+            
+            image_url = _extract_image_url(desc)
 
             news_items.append({
                 "title": title,
                 "link": link,
                 "pubDate": pub_date_str,
-                "source": source,
+                "source": source_name,
                 "image_url": image_url,
-                "sentiment": None,  # filled later by AI
+                "sentiment": None,
             })
-
     except Exception as e:
-        logger.error(f"Error fetching news for {query}: {e}")
+        logger.error(f"Error fetching fallback RSS from {url}: {e}")
 
     return news_items
-
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -169,26 +217,43 @@ def get_latest_market_news() -> dict:
     if cached:
         return cached
 
-    global_query = "Crude Oil OR Petrol Price OR Diesel Price OR OPEC"
-    local_query = "Sri Lanka Petrol Price OR Sri Lanka Diesel Price OR CEYPETCO OR LIOC"
+    api_key = os.getenv("GNEWS_API_KEY")
+    all_news = []
 
-    global_news = fetch_google_news_rss(global_query, max_items=5)
-    local_news = fetch_google_news_rss(local_query, max_items=5)
+    if api_key:
+        # Wrap phrases in quotes so GNews doesn't treat spaces as AND operators, 
+        # which breaks the OR precedence and results in 0 matches.
+        query = '"Crude Oil" OR Petrol OR Diesel OR OPEC OR CEYPETCO OR LIOC OR "Sri Lanka Fuel"'
+        all_news = fetch_gnews(query, api_key, max_items=10)
+
+    # Fallback to official RSS if GNews failed or API key missing
+    if not all_news:
+        logger.warning("GNews failed or missing key. Falling back to Official RSS feeds.")
+        keywords = ["oil", "crude", "petrol", "diesel", "opec", "energy", "fuel", "ceypetco", "lioc", "cpc"]
+        
+        # We wrap in try/except because some feeds might fail due to bot protection
+        try:
+            all_news.extend(fetch_official_rss("https://search.cnbc.com/rs/search/combinedcms/view.xml?id=10000846", keywords, "CNBC Energy"))
+        except Exception:
+            pass
+        try:
+            all_news.extend(fetch_official_rss("http://feeds.bbci.co.uk/news/business/rss.xml", keywords, "BBC Business"))
+        except Exception:
+            pass
+
+        # Limit fallback news to top 10
+        all_news = all_news[:10]
 
     # Batch AI sentiment for all headlines
-    all_headlines = [n["title"] for n in global_news] + [n["title"] for n in local_news]
+    all_headlines = [n["title"] for n in all_news]
     all_sentiments = _analyse_sentiments(all_headlines)
 
     # Assign sentiments back
-    for i, item in enumerate(global_news):
+    for i, item in enumerate(all_news):
         item["sentiment"] = all_sentiments[i]
-    offset = len(global_news)
-    for i, item in enumerate(local_news):
-        item["sentiment"] = all_sentiments[offset + i]
 
     result = {
-        "global_news": global_news,
-        "local_news": local_news,
+        "news": all_news
     }
 
     _set_cache(result)
