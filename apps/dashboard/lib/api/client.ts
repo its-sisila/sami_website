@@ -1349,6 +1349,8 @@ export const pricing = {
         exchange_source: string | null;
         crude_oil_price: number | null;
         crude_oil_source: string | null;
+        crude_oil_history: { date: string; price: number }[];
+        exchange_rate_history: { date: string; price: number }[];
         fetched_at: string;
         errors: string[];
     }>('/pricing/market-snapshot'),

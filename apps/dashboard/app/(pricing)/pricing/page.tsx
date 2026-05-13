@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
     calculateFuelPrice,
     formatCurrency,
@@ -67,6 +68,17 @@ const SENTIMENT_STYLES = {
 
 export default function PricingPage() {
     const { pricingData, isLoading: loadingPricing, error: pricingError } = usePricingData();
+    const [activeChartPeriod, setActiveChartPeriod] = useState<'1W' | '1M' | '3M' | '1Y'>('1M');
+
+    const filterChartData = (data: any[], period: string) => {
+        if (!data || data.length === 0) return [];
+        let days = 30;
+        if (period === '1W') days = 7;
+        else if (period === '1M') days = 30;
+        else if (period === '3M') days = 90;
+        else if (period === '1Y') days = 365;
+        return data.slice(-days);
+    };
 
     const [inputs, setInputs] = useState<PricingInputs>({
         fuelType: "diesel",
@@ -278,7 +290,7 @@ export default function PricingPage() {
     };
 
     // ----- Market News state (auto-fetch, backend has 15-min cache) -----
-    const { data: marketNews, isLoading: newsLoading, mutate: refetchNews } = useSWR(
+    const { data: marketNews, isLoading: newsLoading, error: newsError, mutate: refetchNews } = useSWR(
         '/pricing/market-news',
         api.pricing.getMarketNews,
         {
@@ -753,6 +765,78 @@ export default function PricingPage() {
                                     </div>
                                 )}
 
+                                {/* Charts Section */}
+                                {(marketSnapshot.crude_oil_history?.length > 0 || marketSnapshot.exchange_rate_history?.length > 0) && (
+                                    <div className="mt-6 pt-6 border-t border-slate-200">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
+                                            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Market Trends</h3>
+                                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                                {['1W', '1M', '3M', '1Y'].map(period => (
+                                                    <button
+                                                        key={period}
+                                                        onClick={() => setActiveChartPeriod(period as any)}
+                                                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeChartPeriod === period ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                                    >
+                                                        {period}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            {/* Crude Oil Chart */}
+                                            {marketSnapshot.crude_oil_history?.length > 0 && (
+                                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                                                    <p className="text-[10px] font-bold text-slate-500 mb-4 uppercase tracking-widest flex items-center gap-2">
+                                                        <TrendingUp className="w-3.5 h-3.5 text-red-500" />
+                                                        Brent Crude Oil (USD/bbl)
+                                                    </p>
+                                                    <div className="h-48 w-full">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <LineChart data={filterChartData(marketSnapshot.crude_oil_history, activeChartPeriod)}>
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => val.substring(5)} axisLine={false} tickLine={false} minTickGap={20} />
+                                                                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} width={30} />
+                                                                <Tooltip
+                                                                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '8px', fontSize: '12px', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)' }}
+                                                                    labelStyle={{ color: '#64748b', marginBottom: '4px' }}
+                                                                    itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                                                                />
+                                                                <Line type="monotone" dataKey="price" stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#ef4444', stroke: '#ffffff' }} />
+                                                            </LineChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* USD/LKR Chart */}
+                                            {marketSnapshot.exchange_rate_history?.length > 0 && (
+                                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                                                    <p className="text-[10px] font-bold text-slate-500 mb-4 uppercase tracking-widest flex items-center gap-2">
+                                                        <Globe className="w-3.5 h-3.5 text-sky-500" />
+                                                        USD to LKR Exchange Rate
+                                                    </p>
+                                                    <div className="h-48 w-full">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <LineChart data={filterChartData(marketSnapshot.exchange_rate_history, activeChartPeriod)}>
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => val.substring(5)} axisLine={false} tickLine={false} minTickGap={20} />
+                                                                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} width={35} />
+                                                                <Tooltip
+                                                                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '8px', fontSize: '12px', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)' }}
+                                                                    labelStyle={{ color: '#64748b', marginBottom: '4px' }}
+                                                                    itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                                                                />
+                                                                <Line type="monotone" dataKey="price" stroke="#0ea5e9" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0ea5e9', stroke: '#ffffff' }} />
+                                                            </LineChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Errors from scrapers */}
                                 {marketSnapshot.errors.length > 0 && (
                                     <div className="mt-3 text-[11px] text-amber-500/70">
@@ -907,8 +991,17 @@ export default function PricingPage() {
                             </div>
                         )}
 
+                        {/* Error state */}
+                        {newsError && !newsLoading && (
+                            <div className="flex flex-col items-center justify-center py-6 text-center">
+                                <AlertTriangle className="w-8 h-8 text-red-400 mb-2" />
+                                <p className="text-sm text-red-600 font-medium">Failed to load market news</p>
+                                <p className="text-xs text-slate-500 mt-1">Please check the console or try again later.</p>
+                            </div>
+                        )}
+
                         {/* Empty state */}
-                        {!marketNews && !newsLoading && (
+                        {!marketNews && !newsLoading && !newsError && (
                             <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
                                 <Loader2 className="w-3 h-3 animate-spin" />
                                 Loading market news…
