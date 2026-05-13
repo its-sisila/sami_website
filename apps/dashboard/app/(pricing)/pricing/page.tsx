@@ -37,31 +37,31 @@ function getAdviceSentiment(advice: string): "warning" | "calm" | "neutral" {
 
 const SENTIMENT_STYLES = {
     warning: {
-        border: "border-amber-500/30",
-        bg: "bg-slate-900/60 backdrop-blur-md",
-        glow: "shadow-amber-500/10",
-        icon: <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />,
-        badge: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+        border: "border-emerald-200",
+        bg: "bg-emerald-50/50 backdrop-blur-md",
+        glow: "shadow-emerald-500/5",
+        icon: <AlertTriangle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />,
+        badge: "bg-emerald-100 text-emerald-700 border-emerald-200",
         badgeText: "Action Required",
-        accentBar: "bg-amber-500",
+        accentBar: "bg-emerald-500",
     },
     calm: {
-        border: "border-sky-500/30",
-        bg: "bg-slate-900/60 backdrop-blur-md",
-        glow: "shadow-sky-500/10",
-        icon: <TrendingDown className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />,
-        badge: "bg-sky-500/20 text-sky-300 border-sky-500/30",
+        border: "border-sky-200",
+        bg: "bg-sky-50/50 backdrop-blur-md",
+        glow: "shadow-sky-500/5",
+        icon: <TrendingDown className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />,
+        badge: "bg-sky-100 text-sky-700 border-sky-200",
         badgeText: "Favorable conditions",
         accentBar: "bg-sky-500",
     },
     neutral: {
-        border: "border-slate-600/30",
-        bg: "bg-slate-900/60 backdrop-blur-md",
+        border: "border-slate-200",
+        bg: "bg-slate-50/50 backdrop-blur-md",
         glow: "shadow-none",
-        icon: <Minus className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />,
-        badge: "bg-slate-800 text-slate-300 border-slate-700",
+        icon: <Minus className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />,
+        badge: "bg-slate-100 text-slate-700 border-slate-200",
         badgeText: "Market Stable",
-        accentBar: "bg-slate-500",
+        accentBar: "bg-slate-400",
     },
 } as const;
 
@@ -102,11 +102,11 @@ export default function PricingPage() {
     }): string => {
         // Use fresh snapshot data first, then DB data, then user inputs as last resort
         const liveExchangeRate = snapshot?.exchange_rate ?? pricingData?.exchange_rate ?? inputs.exchangeRate;
-        const liveMogasPrice   = snapshot?.mogas_92_price ?? pricingData?.mogas_92_average ?? inputs.mopsPrice;
-        const liveGasoilPrice  = snapshot?.gasoil_price ?? pricingData?.gasoil_average ?? inputs.mopsPrice;
-        const liveCrudePrice   = snapshot?.crude_oil_price ?? null;
-        const livePremium      = inputs.premium > 0 ? inputs.premium : 3.5;
-        const fetchedAt        = snapshot?.fetched_at ?? null;
+        const liveMogasPrice = snapshot?.mogas_92_price ?? pricingData?.mogas_92_average ?? inputs.mopsPrice;
+        const liveGasoilPrice = snapshot?.gasoil_price ?? pricingData?.gasoil_average ?? inputs.mopsPrice;
+        const liveCrudePrice = snapshot?.crude_oil_price ?? null;
+        const livePremium = inputs.premium > 0 ? inputs.premium : 3.5;
+        const fetchedAt = snapshot?.fetched_at ?? null;
 
         const hasData = liveExchangeRate > 0 && (liveMogasPrice > 0 || liveGasoilPrice > 0);
 
@@ -122,9 +122,9 @@ export default function PricingPage() {
         // Calculate for BOTH fuel types using live scraped prices
         const txOverrides = {
             customsDuty: taxOverrides.customsDuty === '' ? 0 : taxOverrides.customsDuty,
-            exciseDuty:  taxOverrides.exciseDuty  === '' ? 0 : taxOverrides.exciseDuty,
-            palLevy:     taxOverrides.palLevy     === '' ? 0 : taxOverrides.palLevy,
-            ssclRate:    taxOverrides.ssclRate    === '' ? 0 : taxOverrides.ssclRate,
+            exciseDuty: taxOverrides.exciseDuty === '' ? 0 : taxOverrides.exciseDuty,
+            palLevy: taxOverrides.palLevy === '' ? 0 : taxOverrides.palLevy,
+            ssclRate: taxOverrides.ssclRate === '' ? 0 : taxOverrides.ssclRate,
         };
 
         const calcPetrol = calculateFuelPrice({
@@ -144,12 +144,12 @@ export default function PricingPage() {
         });
 
         // Inventory recommendation based on MOPS thresholds
-        const calcForReco  = inputs.fuelType === 'petrol_92' ? calcPetrol : calcDiesel;
-        const mopsForReco  = inputs.fuelType === 'petrol_92' ? liveMogasPrice : liveGasoilPrice;
-        const threshHigh   = inputs.fuelType === 'diesel' ? 85 : 90;
-        const threshLow    = inputs.fuelType === 'diesel' ? 70 : 75;
-        const landedShare  = calcForReco.v1_landedCost / calcForReco.mrp;
-        const taxShare     = calcForReco.v4_taxation   / calcForReco.mrp;
+        const calcForReco = inputs.fuelType === 'petrol_92' ? calcPetrol : calcDiesel;
+        const mopsForReco = inputs.fuelType === 'petrol_92' ? liveMogasPrice : liveGasoilPrice;
+        const threshHigh = inputs.fuelType === 'diesel' ? 85 : 90;
+        const threshLow = inputs.fuelType === 'diesel' ? 70 : 75;
+        const landedShare = calcForReco.v1_landedCost / calcForReco.mrp;
+        const taxShare = calcForReco.v4_taxation / calcForReco.mrp;
 
         let stockReco: string;
         let rationale: string;
@@ -216,7 +216,7 @@ export default function PricingPage() {
         setIsLocalFallback(false);
         try {
             const { advice } = await api.pricing.askAnalyst(AI_DEFAULT_PROMPT);
-            
+
             // Check if the AI returned a raw JSON error string instead of actual advice
             if (typeof advice === 'string' && advice.trim().startsWith('{') && advice.includes('"error"')) {
                 let parsed: { error?: { message?: string } } | null = null;
@@ -289,7 +289,6 @@ export default function PricingPage() {
         }
     );
     const [newsFetched, setNewsFetched] = useState(false);
-    const [activeNewsTab, setActiveNewsTab] = useState<'local' | 'global'>('local');
 
     const handleFetchNews = async () => {
         setNewsFetched(true);
@@ -309,14 +308,14 @@ export default function PricingPage() {
             const diffInMs = now.getTime() - date.getTime();
             const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
             const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-            
+
             if (diffInHours < 1) return 'Just now';
             if (diffInHours < 24) {
                 return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
             } else {
                 return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`;
             }
-        } catch(e) {
+        } catch (e) {
             return dateStr;
         }
     };
@@ -376,74 +375,94 @@ export default function PricingPage() {
     const styles = sentiment ? SENTIMENT_STYLES[sentiment] : null;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+        <div className="min-h-screen bg-slate-50 p-6">
             <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="mb-8">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="bg-red-900 p-2 rounded-lg">
-                            <Calculator className="w-6 h-6 text-white" />
+                {/* ── Terminal Header ── */}
+                <div className="mb-6">
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-gradient-to-br from-amber-500 to-yellow-500 p-2 rounded-lg shadow-sm shadow-amber-500/10">
+                                <Calculator className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                                    Price Formula
+                                    <span className="text-amber-600 ml-2 text-sm font-semibold tracking-widest uppercase">Terminal</span>
+                                </h1>
+                            </div>
                         </div>
-                        <h1 className="text-3xl font-bold text-white">Price Formula Calculator</h1>
+                        <div className="hidden sm:flex items-center gap-3 text-xs text-slate-500">
+                            <span className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                <span className="uppercase tracking-wider font-medium text-emerald-600">Live</span>
+                            </span>
+                            <span className="text-slate-300">|</span>
+                            <span className="font-financial">{new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                        </div>
                     </div>
-                    <p className="text-slate-400">
-                        Calculate fuel prices based on the 2025 Sri Lankan Formula (MOPS-based)
+                    <p className="text-xs text-slate-500 ml-12">
+                        Sri Lanka Fuel Pricing Engine &bull; 2025 MOPS-Based Formula &bull; Gazette Revision
                     </p>
                 </div>
 
-                {/* ── Scrolling News Ticker ── */}
+                {/* ── Market Wire Ticker ── */}
                 {marketNews && (marketNews.global_news?.length > 0 || marketNews.local_news?.length > 0) && (
-                    <div className="mb-6 overflow-hidden rounded-lg bg-slate-900/60 border border-slate-800 py-2.5 px-4">
-                        <div className="flex animate-marquee whitespace-nowrap gap-12">
-                            {[...( marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
-                                <span key={i} className="inline-flex items-center gap-2 text-xs text-slate-300">
-                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${
-                                        item.sentiment === 'bullish' ? 'bg-emerald-400' :
-                                        item.sentiment === 'bearish' ? 'bg-red-400' :
-                                        'bg-slate-500'
-                                    }`} />
-                                    <span className="font-medium">{item.source}</span>
-                                    <span className="text-slate-500">|</span>
-                                    <span>{item.title?.length > 80 ? item.title.slice(0, 80) + '…' : item.title}</span>
-                                </span>
-                            ))}
-                            {/* Duplicate for seamless loop */}
-                            {[...(marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
-                                <span key={`dup-${i}`} className="inline-flex items-center gap-2 text-xs text-slate-300">
-                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${
-                                        item.sentiment === 'bullish' ? 'bg-emerald-400' :
-                                        item.sentiment === 'bearish' ? 'bg-red-400' :
-                                        'bg-slate-500'
-                                    }`} />
-                                    <span className="font-medium">{item.source}</span>
-                                    <span className="text-slate-500">|</span>
-                                    <span>{item.title?.length > 80 ? item.title.slice(0, 80) + '…' : item.title}</span>
-                                </span>
-                            ))}
+                    <div className="mb-6 relative overflow-hidden rounded-lg border border-amber-200 bg-white ticker-scanline">
+                        <div className="flex items-stretch">
+                            <div className="flex items-center px-3 bg-amber-50 border-r border-amber-200 shrink-0">
+                                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest whitespace-nowrap">Market Wire</span>
+                            </div>
+                            <div className="overflow-hidden py-2.5 px-3 flex-1">
+                                <div className="flex animate-marquee whitespace-nowrap gap-10">
+                                    {[...(marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
+                                        <span key={i} className="inline-flex items-center gap-2 text-xs text-slate-600">
+                                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${item.sentiment === 'bullish' ? 'bg-emerald-500' :
+                                                item.sentiment === 'bearish' ? 'bg-red-500' :
+                                                    'bg-slate-400'
+                                                }`} />
+                                            <span className="font-medium text-slate-800">{item.source}</span>
+                                            <span className="text-slate-300">|</span>
+                                            <span>{item.title?.length > 80 ? item.title.slice(0, 80) + '…' : item.title}</span>
+                                        </span>
+                                    ))}
+                                    {/* Duplicate for seamless loop */}
+                                    {[...(marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
+                                        <span key={`dup-${i}`} className="inline-flex items-center gap-2 text-xs text-slate-600">
+                                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${item.sentiment === 'bullish' ? 'bg-emerald-500' :
+                                                item.sentiment === 'bearish' ? 'bg-red-500' :
+                                                    'bg-slate-400'
+                                                }`} />
+                                            <span className="font-medium text-slate-800">{item.source}</span>
+                                            <span className="text-slate-300">|</span>
+                                            <span>{item.title?.length > 80 ? item.title.slice(0, 80) + '…' : item.title}</span>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {/* ── AI Market Analyst Section ── */}
-                <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
+                <div className="mb-6 bg-white backdrop-blur-sm border border-emerald-200 rounded-xl overflow-hidden shadow-sm">
                     {/* Top accent bar */}
-                    <div className="h-1 bg-gradient-to-r from-red-600 via-red-500 to-amber-500" />
+                    <div className="h-px bg-gradient-to-r from-transparent via-emerald-400 to-transparent" />
 
                     <div className="p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="relative">
-                                    <div className="bg-gradient-to-br from-red-600 to-red-600 p-2.5 rounded-xl shadow-lg shadow-purple-500/20">
+                                    <div className="bg-gradient-to-br from-emerald-500 to-teal-500 p-2.5 rounded-xl shadow-sm shadow-emerald-500/20">
                                         <Sparkles className="w-5 h-5 text-white" />
                                     </div>
-                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-slate-900 animate-pulse" />
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-semibold text-white tracking-tight">
-                                        SAMI AI Analyst Advice
+                                    <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
+                                        SAMI AI Analyst
                                     </h2>
                                     <p className="text-xs text-slate-500">
-                                        Powered by Gemini &bull; Real-time MOPS & LKR analysis
+                                        Gemini 2.5 Flash &bull; Real-time MOPS & LKR Analysis
                                     </p>
                                 </div>
                             </div>
@@ -451,7 +470,7 @@ export default function PricingPage() {
                             <Button
                                 onClick={handleAskAnalyst}
                                 disabled={analystLoading}
-                                className="bg-gradient-to-r from-red-600 to-re-600 hover:from-red-500 hover:to-red-500 text-white font-medium px-5 py-2.5 rounded-lg shadow-lg shadow-red-500/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 hover:border-emerald-300 font-medium px-5 py-2.5 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {analystLoading ? (
                                     <>
@@ -470,9 +489,9 @@ export default function PricingPage() {
                         {/* Loading shimmer */}
                         {analystLoading && (
                             <div className="space-y-3 animate-pulse">
-                                <div className="h-4 bg-slate-700/60 rounded-full w-3/4" />
-                                <div className="h-4 bg-slate-700/40 rounded-full w-1/2" />
-                                <div className="h-4 bg-slate-700/30 rounded-full w-2/3" />
+                                <div className="h-4 bg-slate-200 rounded-full w-3/4" />
+                                <div className="h-4 bg-slate-100 rounded-full w-1/2" />
+                                <div className="h-4 bg-slate-100 rounded-full w-2/3" />
                             </div>
                         )}
 
@@ -481,7 +500,7 @@ export default function PricingPage() {
                             <div
                                 className={`
                                     relative rounded-xl border ${styles.border} ${styles.bg}
-                                    shadow-lg ${styles.glow}
+                                    shadow-sm ${styles.glow}
                                     transition-all duration-500 ease-out
                                 `}
                             >
@@ -500,32 +519,32 @@ export default function PricingPage() {
                                                         {styles.badgeText}
                                                     </span>
                                                     {isLocalFallback && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-slate-600 bg-slate-800 text-slate-400">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full border border-slate-300 bg-slate-100 text-slate-600">
                                                             <Calculator className="w-2.5 h-2.5" />
                                                             Formula Mode
                                                         </span>
                                                     )}
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={handleCopyAdvice}
-                                                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors"
+                                                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
                                                     title="Copy to clipboard"
                                                 >
-                                                    {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                                                    {isCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                                                 </button>
                                             </div>
-                                            <div className="text-sm leading-relaxed text-slate-200">
-                                                <ReactMarkdown 
+                                            <div className="text-sm leading-relaxed text-slate-800">
+                                                <ReactMarkdown
                                                     remarkPlugins={[remarkGfm]}
                                                     components={{
-                                                        p: ({node, ...props}) => <p className="mb-4 last:mb-0" {...props} />,
-                                                        strong: ({node, ...props}) => <strong className="font-semibold text-white" {...props} />,
-                                                        ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-1" {...props} />,
-                                                        ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-1" {...props} />,
-                                                        li: ({node, ...props}) => <li className="text-slate-300" {...props} />,
-                                                        h1: ({node, ...props}) => <h1 className="text-lg font-bold text-white mb-2 mt-4" {...props} />,
-                                                        h2: ({node, ...props}) => <h2 className="text-base font-bold text-white mb-2 mt-4" {...props} />,
-                                                        h3: ({node, ...props}) => <h3 className="text-sm font-bold text-white mb-2 mt-3" {...props} />,
+                                                        p: ({ node, ...props }) => <p className="mb-4 last:mb-0" {...props} />,
+                                                        strong: ({ node, ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
+                                                        ul: ({ node, ...props }) => <ul className="list-disc pl-5 mb-4 space-y-1" {...props} />,
+                                                        ol: ({ node, ...props }) => <ol className="list-decimal pl-5 mb-4 space-y-1" {...props} />,
+                                                        li: ({ node, ...props }) => <li className="text-slate-700" {...props} />,
+                                                        h1: ({ node, ...props }) => <h1 className="text-lg font-bold text-slate-900 mb-2 mt-4" {...props} />,
+                                                        h2: ({ node, ...props }) => <h2 className="text-base font-bold text-slate-900 mb-2 mt-4" {...props} />,
+                                                        h3: ({ node, ...props }) => <h3 className="text-sm font-bold text-slate-900 mb-2 mt-3" {...props} />,
                                                     }}
                                                 >
                                                     {analystAdvice}
@@ -539,17 +558,17 @@ export default function PricingPage() {
 
                         {/* Error state */}
                         {analystError && !analystLoading && (
-                            <div className="relative rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-950/40 via-slate-900/60 to-slate-900/80 shadow-lg">
+                            <div className="relative rounded-xl border border-amber-200 bg-amber-50/50 shadow-sm">
                                 <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-amber-500" />
                                 <div className="pl-6 pr-5 py-5">
                                     <div className="flex items-start gap-3">
-                                        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-amber-300 mb-1">Unable to get AI advice</p>
-                                            <p className="text-sm text-slate-300 mb-3">{analystError}</p>
+                                            <p className="text-sm font-medium text-amber-800 mb-1">Unable to get AI advice</p>
+                                            <p className="text-sm text-slate-700 mb-3">{analystError}</p>
                                             <Button
                                                 onClick={handleAskAnalyst}
-                                                className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs px-3 py-1.5 rounded-lg"
+                                                className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-200 text-xs px-3 py-1.5 rounded-lg shadow-sm"
                                             >
                                                 <RefreshCw className="w-3 h-3 mr-1.5" />
                                                 Try Again
@@ -562,7 +581,7 @@ export default function PricingPage() {
 
                         {/* Empty-state hint */}
                         {!analystAdvice && !analystLoading && !analystError && (
-                            <div className="flex items-center gap-2 text-xs text-slate-600">
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
                                 <Sparkles className="w-3 h-3" />
                                 Click the button above to get live AI-powered market advice
                             </div>
@@ -572,16 +591,16 @@ export default function PricingPage() {
                 {/* ── End AI Market Analyst Section ── */}
 
                 {/* ── Live Market Data Section ── */}
-                <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
-                    <div className="h-1 bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500" />
+                <div className="mb-6 bg-white backdrop-blur-sm border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="h-px bg-gradient-to-r from-transparent via-emerald-400 to-transparent" />
                     <div className="p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
                             <div className="flex items-center gap-3">
-                                <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-2.5 rounded-xl shadow-lg shadow-emerald-500/20">
+                                <div className="bg-gradient-to-br from-emerald-500 to-teal-500 p-2.5 rounded-xl shadow-sm shadow-emerald-500/20">
                                     <Activity className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-semibold text-white tracking-tight">
+                                    <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
                                         Live Market Data
                                     </h2>
                                     <p className="text-xs text-slate-500">
@@ -592,7 +611,7 @@ export default function PricingPage() {
                             <Button
                                 onClick={handleFetchMarket}
                                 disabled={marketLoading}
-                                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium px-5 py-2.5 rounded-lg shadow-lg shadow-emerald-500/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 hover:border-emerald-300 font-medium px-5 py-2.5 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {marketLoading ? (
                                     <>
@@ -612,10 +631,10 @@ export default function PricingPage() {
                         {marketLoading && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
                                 {[1, 2, 3, 4].map((i) => (
-                                    <div key={i} className="bg-slate-800/60 rounded-xl p-5 space-y-3">
-                                        <div className="h-3 bg-slate-700/60 rounded-full w-1/2" />
-                                        <div className="h-8 bg-slate-700/40 rounded-full w-3/4" />
-                                        <div className="h-3 bg-slate-700/30 rounded-full w-1/3" />
+                                    <div key={i} className="bg-slate-50 rounded-xl p-5 space-y-3 border border-slate-200">
+                                        <div className="h-3 bg-slate-200 rounded-full w-1/2" />
+                                        <div className="h-8 bg-slate-100 rounded-full w-3/4" />
+                                        <div className="h-3 bg-slate-100 rounded-full w-1/3" />
                                     </div>
                                 ))}
                             </div>
@@ -626,78 +645,78 @@ export default function PricingPage() {
                             <>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                                     {/* Mogas 92 */}
-                                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border border-slate-700/50 rounded-xl p-5 hover:border-emerald-500/30 transition-colors">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <BarChart3 className="w-4 h-4 text-emerald-400" />
-                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Mogas 92</p>
+                                    <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 hover:border-emerald-200 transition-all duration-300 group">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mogas 92</p>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-medium">USD/bbl</span>
                                         </div>
                                         {marketSnapshot.mogas_92_price != null ? (
-                                            <>
-                                                <p className="text-2xl font-bold text-white mb-1">${marketSnapshot.mogas_92_price.toFixed(2)}</p>
-                                                <p className="text-xs text-slate-500">USD/barrel</p>
-                                            </>
+                                            <p className="text-2xl font-bold text-slate-900 font-financial mb-1 group-hover:text-emerald-700 transition-colors">${marketSnapshot.mogas_92_price.toFixed(2)}</p>
                                         ) : (
                                             <p className="text-sm text-slate-500 italic">Unavailable</p>
                                         )}
                                         {marketSnapshot.mogas_92_source && (
-                                            <p className="text-[10px] text-slate-600 mt-2">via {marketSnapshot.mogas_92_source}</p>
+                                            <p className="text-[10px] text-slate-400 mt-2">via {marketSnapshot.mogas_92_source}</p>
                                         )}
                                     </div>
 
                                     {/* Gasoil */}
-                                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border border-slate-700/50 rounded-xl p-5 hover:border-amber-500/30 transition-colors">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <BarChart3 className="w-4 h-4 text-amber-400" />
-                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Gasoil (Diesel)</p>
+                                    <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 hover:border-amber-200 transition-all duration-300 group">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <BarChart3 className="w-3.5 h-3.5 text-amber-600" />
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Gasoil</p>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-medium">USD/bbl</span>
                                         </div>
                                         {marketSnapshot.gasoil_price != null ? (
-                                            <>
-                                                <p className="text-2xl font-bold text-white mb-1">${marketSnapshot.gasoil_price.toFixed(2)}</p>
-                                                <p className="text-xs text-slate-500">USD/barrel</p>
-                                            </>
+                                            <p className="text-2xl font-bold text-slate-900 font-financial mb-1 group-hover:text-amber-700 transition-colors">${marketSnapshot.gasoil_price.toFixed(2)}</p>
                                         ) : (
                                             <p className="text-sm text-slate-500 italic">Unavailable</p>
                                         )}
                                         {marketSnapshot.gasoil_source && (
-                                            <p className="text-[10px] text-slate-600 mt-2">via {marketSnapshot.gasoil_source}</p>
+                                            <p className="text-[10px] text-slate-400 mt-2">via {marketSnapshot.gasoil_source}</p>
                                         )}
                                     </div>
 
                                     {/* USD/LKR Exchange Rate */}
-                                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border border-slate-700/50 rounded-xl p-5 hover:border-sky-500/30 transition-colors">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Globe className="w-4 h-4 text-sky-400" />
-                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">USD/LKR</p>
+                                    <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 hover:border-sky-200 transition-all duration-300 group">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Globe className="w-3.5 h-3.5 text-sky-600" />
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">USD/LKR</p>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-medium">per 1 USD</span>
                                         </div>
                                         {marketSnapshot.exchange_rate != null ? (
-                                            <>
-                                                <p className="text-2xl font-bold text-white mb-1">Rs. {marketSnapshot.exchange_rate.toFixed(2)}</p>
-                                                <p className="text-xs text-slate-500">per 1 USD</p>
-                                            </>
+                                            <p className="text-2xl font-bold text-slate-900 font-financial mb-1 group-hover:text-sky-700 transition-colors">Rs. {marketSnapshot.exchange_rate.toFixed(2)}</p>
                                         ) : (
                                             <p className="text-sm text-slate-500 italic">Unavailable</p>
                                         )}
                                         {marketSnapshot.exchange_source && (
-                                            <p className="text-[10px] text-slate-600 mt-2">via {marketSnapshot.exchange_source}</p>
+                                            <p className="text-[10px] text-slate-400 mt-2">via {marketSnapshot.exchange_source}</p>
                                         )}
                                     </div>
 
                                     {/* Brent Crude Oil */}
-                                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border border-slate-700/50 rounded-xl p-5 hover:border-red-500/30 transition-colors">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <TrendingUp className="w-4 h-4 text-red-400" />
-                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Brent Crude</p>
+                                    <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 hover:border-red-200 transition-all duration-300 group">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <TrendingUp className="w-3.5 h-3.5 text-red-600" />
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Brent Crude</p>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-medium">USD/bbl</span>
                                         </div>
                                         {marketSnapshot.crude_oil_price != null ? (
-                                            <>
-                                                <p className="text-2xl font-bold text-white mb-1">${marketSnapshot.crude_oil_price.toFixed(2)}</p>
-                                                <p className="text-xs text-slate-500">USD/barrel</p>
-                                            </>
+                                            <p className="text-2xl font-bold text-slate-900 font-financial mb-1 group-hover:text-red-700 transition-colors">${marketSnapshot.crude_oil_price.toFixed(2)}</p>
                                         ) : (
                                             <p className="text-sm text-slate-500 italic">Unavailable</p>
                                         )}
                                         {marketSnapshot.crude_oil_source && (
-                                            <p className="text-[10px] text-slate-600 mt-2">via {marketSnapshot.crude_oil_source}</p>
+                                            <p className="text-[10px] text-slate-400 mt-2">via {marketSnapshot.crude_oil_source}</p>
                                         )}
                                     </div>
                                 </div>
@@ -706,26 +725,26 @@ export default function PricingPage() {
                                 {(marketSnapshot.mogas_92_history.length > 0 || marketSnapshot.gasoil_history.length > 0) && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {marketSnapshot.mogas_92_history.length > 0 && (
-                                            <div className="bg-slate-800/40 border border-slate-700/30 rounded-lg p-4">
-                                                <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Mogas 92 — 7 Day History</p>
-                                                <div className="space-y-1">
-                                                    {marketSnapshot.mogas_92_history.map((d) => (
-                                                        <div key={d.date} className="flex justify-between text-xs">
+                                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                                <p className="text-[10px] font-bold text-slate-500 mb-3 uppercase tracking-widest">Mogas 92 — 7 Day History</p>
+                                                <div className="space-y-1.5">
+                                                    {marketSnapshot.mogas_92_history.map((d, idx) => (
+                                                        <div key={d.date} className={`flex justify-between text-xs px-2 py-1 rounded ${idx % 2 === 0 ? 'bg-white' : ''}`}>
                                                             <span className="text-slate-500">{d.date}</span>
-                                                            <span className="text-slate-300 font-mono">${d.price.toFixed(2)}</span>
+                                                            <span className="text-slate-700 font-financial">${d.price.toFixed(2)}</span>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
                                         {marketSnapshot.gasoil_history.length > 0 && (
-                                            <div className="bg-slate-800/40 border border-slate-700/30 rounded-lg p-4">
-                                                <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Gasoil (Diesel) — 7 Day History</p>
-                                                <div className="space-y-1">
-                                                    {marketSnapshot.gasoil_history.map((d) => (
-                                                        <div key={d.date} className="flex justify-between text-xs">
+                                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                                <p className="text-[10px] font-bold text-slate-500 mb-3 uppercase tracking-widest">Gasoil (Diesel) — 7 Day History</p>
+                                                <div className="space-y-1.5">
+                                                    {marketSnapshot.gasoil_history.map((d, idx) => (
+                                                        <div key={d.date} className={`flex justify-between text-xs px-2 py-1 rounded ${idx % 2 === 0 ? 'bg-white' : ''}`}>
                                                             <span className="text-slate-500">{d.date}</span>
-                                                            <span className="text-slate-300 font-mono">${d.price.toFixed(2)}</span>
+                                                            <span className="text-slate-700 font-financial">${d.price.toFixed(2)}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -744,7 +763,7 @@ export default function PricingPage() {
                                 )}
 
                                 {/* Fetched timestamp */}
-                                <p className="text-[10px] text-slate-600 mt-3">
+                                <p className="text-[10px] text-slate-600 mt-3 font-financial">
                                     Last fetched: {new Date(marketSnapshot.fetched_at).toLocaleTimeString()}
                                 </p>
                             </>
@@ -762,16 +781,16 @@ export default function PricingPage() {
                 {/* ── End Live Market Data Section ── */}
 
                 {/* ── Market News Section ── */}
-                <div className="mb-8 bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl overflow-hidden">
-                    <div className="h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-500" />
+                <div className="mb-6 bg-white backdrop-blur-sm border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="h-px bg-gradient-to-r from-transparent via-indigo-400 to-transparent" />
                     <div className="p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
                             <div className="flex items-center gap-3">
-                                <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+                                <div className="bg-gradient-to-br from-blue-500 to-indigo-500 p-2.5 rounded-xl shadow-sm shadow-blue-500/20">
                                     <Newspaper className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-semibold text-white tracking-tight">
+                                    <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
                                         Energy Market News
                                     </h2>
                                     <p className="text-xs text-slate-500">
@@ -782,7 +801,7 @@ export default function PricingPage() {
                             <Button
                                 onClick={handleFetchNews}
                                 disabled={newsLoading}
-                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 hover:border-indigo-300 font-medium px-5 py-2.5 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {newsLoading ? (
                                     <>
@@ -798,41 +817,19 @@ export default function PricingPage() {
                             </Button>
                         </div>
 
-                        {/* Tabs — always visible */}
-                        <div className="mb-4 border-b border-slate-800">
-                            <div className="flex space-x-4">
-                                <button
-                                    onClick={() => setActiveNewsTab('local')}
-                                    className={`pb-3 text-sm font-medium transition-colors relative ${activeNewsTab === 'local' ? 'text-blue-400' : 'text-slate-400 hover:text-slate-300'}`}
-                                >
-                                    <span className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Sri Lanka</span>
-                                    {activeNewsTab === 'local' && (
-                                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full" />
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => setActiveNewsTab('global')}
-                                    className={`pb-3 text-sm font-medium transition-colors relative ${activeNewsTab === 'global' ? 'text-blue-400' : 'text-slate-400 hover:text-slate-300'}`}
-                                >
-                                    <span className="flex items-center gap-2"><Globe className="w-4 h-4" /> Global</span>
-                                    {activeNewsTab === 'global' && (
-                                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-t-full" />
-                                    )}
-                                </button>
-                            </div>
-                        </div>
+
 
                         {/* Loading skeleton */}
                         {newsLoading && (
                             <div className="space-y-4 animate-pulse mt-4">
                                 {[1, 2, 3].map((i) => (
-                                    <div key={i} className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30 flex gap-4">
-                                        <div className="w-16 h-16 bg-slate-700/50 rounded-lg shrink-0" />
+                                    <div key={i} className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex gap-4">
+                                        <div className="w-16 h-16 bg-slate-200 rounded-lg shrink-0" />
                                         <div className="flex-1 space-y-3">
-                                            <div className="h-4 bg-slate-700/60 rounded-full w-3/4" />
+                                            <div className="h-4 bg-slate-200 rounded-full w-3/4" />
                                             <div className="flex gap-4">
-                                                <div className="h-3 bg-slate-700/40 rounded-full w-1/4" />
-                                                <div className="h-3 bg-slate-700/30 rounded-full w-1/4" />
+                                                <div className="h-3 bg-slate-100 rounded-full w-1/4" />
+                                                <div className="h-3 bg-slate-100 rounded-full w-1/4" />
                                             </div>
                                         </div>
                                     </div>
@@ -843,54 +840,46 @@ export default function PricingPage() {
                         {/* News content */}
                         {marketNews && !newsLoading && (
                             <div className="mt-4">
-                                {/* Globe — shown above news on Global tab */}
-                                {activeNewsTab === 'global' && (
-                                    <div className="flex justify-center mb-6">
-                                        <WorldGlobe size={280} />
-                                    </div>
-                                )}
-
                                 {/* News list */}
                                 <div className="space-y-3">
-                                    {(activeNewsTab === 'local' ? marketNews.local_news : marketNews.global_news)?.map((item: any, i: number) => (
+                                    {marketNews.news?.map((item: any, i: number) => (
                                         <a
                                             key={i}
                                             href={item.link}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="group flex gap-4 bg-slate-800/40 border border-slate-700/50 hover:border-blue-500/50 rounded-xl p-4 transition-all duration-300 hover:shadow-lg hover:shadow-blue-900/20"
+                                            className="group flex gap-4 bg-slate-50/50 border border-slate-200 hover:border-blue-300 rounded-xl p-4 transition-all duration-300 hover:shadow-sm hover:shadow-blue-900/5"
                                         >
                                             {/* Thumbnail or gradient placeholder */}
                                             {item.image_url ? (
                                                 <img
                                                     src={item.image_url}
                                                     alt=""
-                                                    className="w-16 h-16 rounded-lg object-cover shrink-0 border border-slate-700/50"
+                                                    className="w-16 h-16 rounded-lg object-cover shrink-0 border border-slate-200"
                                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                                 />
                                             ) : (
-                                                <div className="w-16 h-16 rounded-lg shrink-0 bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border border-slate-700/50 flex items-center justify-center">
-                                                    <Newspaper className="w-5 h-5 text-slate-600" />
+                                                <div className="w-16 h-16 rounded-lg shrink-0 bg-gradient-to-br from-blue-100 to-indigo-100 border border-slate-200 flex items-center justify-center">
+                                                    <Newspaper className="w-5 h-5 text-slate-400" />
                                                 </div>
                                             )}
 
                                             {/* Content */}
                                             <div className="flex-1 min-w-0">
-                                                <h3 className="text-sm font-medium text-slate-200 group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug mb-2">
+                                                <h3 className="text-sm font-medium text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug mb-2">
                                                     {item.title}
                                                 </h3>
                                                 <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium flex-wrap">
-                                                    <span className="bg-slate-900/50 px-2 py-0.5 rounded text-slate-400">{item.source}</span>
+                                                    <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{item.source}</span>
                                                     <span>•</span>
                                                     <span>{getRelativeTimeString(item.pubDate)}</span>
 
                                                     {/* Sentiment badge */}
                                                     {item.sentiment && item.sentiment !== 'neutral' && (
-                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider ${
-                                                            item.sentiment === 'bullish'
-                                                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                                                                : 'bg-red-500/15 text-red-300 border-red-500/30'
-                                                        }`}>
+                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider ${item.sentiment === 'bullish'
+                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                            : 'bg-red-50 text-red-700 border-red-200'
+                                                            }`}>
                                                             {item.sentiment === 'bullish' ? (
                                                                 <><TrendingUp className="w-3 h-3" /> Bullish</>
                                                             ) : (
@@ -899,19 +888,19 @@ export default function PricingPage() {
                                                         </span>
                                                     )}
                                                     {item.sentiment === 'neutral' && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider bg-slate-500/15 text-slate-400 border-slate-500/30">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider bg-slate-100 text-slate-600 border-slate-200">
                                                             <Minus className="w-3 h-3" /> Neutral
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
 
-                                            <ExternalLink className="w-4 h-4 text-slate-600 group-hover:text-blue-400 shrink-0 transition-colors mt-1" />
+                                            <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-blue-600 shrink-0 transition-colors mt-1" />
                                         </a>
                                     ))}
-                                    {(activeNewsTab === 'local' ? marketNews.local_news : marketNews.global_news)?.length === 0 && (
+                                    {marketNews.news?.length === 0 && (
                                         <div className="text-center py-6 text-sm text-slate-500">
-                                            No recent news found for this category.
+                                            No recent news found.
                                         </div>
                                     )}
                                 </div>
@@ -920,7 +909,7 @@ export default function PricingPage() {
 
                         {/* Empty state */}
                         {!marketNews && !newsLoading && (
-                            <div className="flex items-center gap-2 text-xs text-slate-600 mt-2">
+                            <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
                                 <Loader2 className="w-3 h-3 animate-spin" />
                                 Loading market news…
                             </div>
@@ -931,242 +920,209 @@ export default function PricingPage() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Input Panel */}
-                    <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
-                        <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                            <DollarSign className="w-5 h-5 text-red-400" />
-                            Input Parameters
-                        </h2>
+                    <div className="bg-white backdrop-blur-sm border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <div className="h-px bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+                        <div className="p-6">
+                            <h2 className="text-sm font-bold text-slate-800 mb-6 flex items-center gap-2 uppercase tracking-widest">
+                                <DollarSign className="w-4 h-4 text-amber-500" />
+                                Input Parameters
+                            </h2>
 
-                        <div className="space-y-4">
-                            {/* Use Live Data Button */}
-                            <div className="border border-slate-700 rounded-lg p-4 bg-slate-800/30">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div>
-                                        <p className="text-sm font-medium text-white">Live Market Data</p>
-                                        {pricingData?.last_updated && (
-                                            <p className="text-xs text-slate-500">
-                                                Updated: {new Date(pricingData.last_updated).toLocaleDateString()}
-                                            </p>
-                                        )}
+                            <div className="space-y-4">
+                                {/* Use Live Data */}
+                                <div className="border border-amber-200 rounded-lg p-4 bg-amber-50/50">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div>
+                                            <p className="text-sm font-medium text-slate-900">Live Market Data</p>
+                                            {pricingData?.last_updated && (
+                                                <p className="text-[10px] text-slate-500 font-financial">
+                                                    Updated: {new Date(pricingData.last_updated).toLocaleDateString()}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <Button
+                                            onClick={handleUseLiveData}
+                                            disabled={loadingPricing || !pricingData}
+                                            className="bg-amber-100 hover:bg-amber-200 text-amber-700 border border-amber-200 text-xs disabled:opacity-50"
+                                        >
+                                            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                                            {loadingPricing ? "Loading..." : "Use Live Data"}
+                                        </Button>
                                     </div>
-                                    <Button
-                                        onClick={handleUseLiveData}
-                                        disabled={loadingPricing || !pricingData}
-                                        className="bg-green-900 hover:bg-green-800 text-white text-sm disabled:opacity-50"
+                                    {pricingError && (
+                                        <p className="text-xs text-red-600">Unable to load live data</p>
+                                    )}
+                                </div>
+
+                                {/* Fuel Type */}
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">
+                                        Fuel Type
+                                    </label>
+                                    <select
+                                        value={inputs.fuelType}
+                                        onChange={(e) => handleInputChange("fuelType", e.target.value as FuelType)}
+                                        className="w-full bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-slate-900 font-financial focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-all"
                                     >
-                                        <RefreshCw className="w-4 h-4 mr-1.5" />
-                                        {loadingPricing ? "Loading..." : "Use Live Data"}
-                                    </Button>
+                                        <option value="petrol_92">Petrol 92</option>
+                                        <option value="diesel">Diesel</option>
+                                    </select>
                                 </div>
-                                {pricingError && (
-                                    <p className="text-xs text-red-400">Unable to load live data</p>
-                                )}
-                            </div>
 
-                            {/* Fuel Type */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">
-                                    Fuel Type
-                                </label>
-                                <select
-                                    value={inputs.fuelType}
-                                    onChange={(e) => handleInputChange("fuelType", e.target.value as FuelType)}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                                {/* MOPS Price */}
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">
+                                        MOPS Price <span className="text-slate-500 normal-case tracking-normal font-normal">USD/barrel</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={inputs.mopsPrice}
+                                        onChange={(e) => handleInputChange("mopsPrice", e.target.value)}
+                                        className="w-full bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-slate-900 font-financial focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-all"
+                                    />
+                                </div>
+
+                                {/* Premium */}
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">
+                                        Premium <span className="text-slate-500 normal-case tracking-normal font-normal">Freight + Insurance + Margin</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={inputs.premium}
+                                        onChange={(e) => handleInputChange("premium", e.target.value)}
+                                        className="w-full bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-slate-900 font-financial focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-all"
+                                    />
+                                </div>
+
+                                {/* Exchange Rate */}
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">
+                                        Exchange Rate <span className="text-slate-500 normal-case tracking-normal font-normal">CBSL TT Selling Rate</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={inputs.exchangeRate}
+                                        onChange={(e) => handleInputChange("exchangeRate", e.target.value)}
+                                        className="w-full bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-slate-900 font-financial focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-all"
+                                    />
+                                </div>
+
+                                {/* Taxation */}
+                                <div className="border-t border-slate-200 pt-4">
+                                    <h3 className="text-[10px] font-bold text-slate-500 mb-2 flex items-center gap-2 uppercase tracking-widest">
+                                        <Percent className="w-3.5 h-3.5 text-amber-500" />
+                                        Taxation Override <span className="text-slate-500 normal-case tracking-normal font-normal">LKR/Liter — leave 0 for defaults</span>
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-3 mt-3">
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Customs Duty</label>
+                                            <input type="number" step="0.01" value={taxOverrides.customsDuty}
+                                                onChange={(e) => setTaxOverrides(prev => ({ ...prev, customsDuty: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }))}
+                                                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 text-sm font-financial focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Excise Duty</label>
+                                            <input type="number" step="0.01" value={taxOverrides.exciseDuty}
+                                                onChange={(e) => setTaxOverrides(prev => ({ ...prev, exciseDuty: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }))}
+                                                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 text-sm font-financial focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">PAL Levy</label>
+                                            <input type="number" step="0.01" value={taxOverrides.palLevy}
+                                                onChange={(e) => setTaxOverrides(prev => ({ ...prev, palLevy: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }))}
+                                                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 text-sm font-financial focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">SSCL Rate (%)</label>
+                                            <input type="number" step="0.01" value={taxOverrides.ssclRate}
+                                                onChange={(e) => setTaxOverrides(prev => ({ ...prev, ssclRate: e.target.value === '' ? '' : parseFloat(e.target.value) || 1.25 }))}
+                                                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 text-sm font-financial focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Calculate Button */}
+                                <Button
+                                    onClick={handleCalculate}
+                                    className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white py-3 rounded-lg font-semibold transition-all shadow-sm shadow-amber-500/15"
                                 >
-                                    <option value="petrol_92">Petrol 92</option>
-                                    <option value="diesel">Diesel</option>
-                                </select>
+                                    <Calculator className="w-5 h-5 mr-2" />
+                                    Calculate Price
+                                </Button>
                             </div>
-
-                            {/* MOPS Price */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">
-                                    MOPS Price (USD/barrel)
-                                    <span className="text-xs text-slate-500 ml-2">Mean of Platts Singapore</span>
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={inputs.mopsPrice}
-                                    onChange={(e) => handleInputChange("mopsPrice", e.target.value)}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                                />
-                            </div>
-
-                            {/* Premium */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">
-                                    Premium (USD/barrel)
-                                    <span className="text-xs text-slate-500 ml-2">Freight + Insurance + Margin</span>
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={inputs.premium}
-                                    onChange={(e) => handleInputChange("premium", e.target.value)}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                                />
-                            </div>
-
-                            {/* Exchange Rate */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">
-                                    Exchange Rate (LKR/USD)
-                                    <span className="text-xs text-slate-500 ml-2">CBSL TT Selling Rate</span>
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={inputs.exchangeRate}
-                                    onChange={(e) => handleInputChange("exchangeRate", e.target.value)}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                                />
-                            </div>
-
-
-                            {/* Taxation Inputs (Optional Override) */}
-                            <div className="border-t border-slate-700 pt-4">
-                                <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
-                                    <Percent className="w-4 h-4 text-red-400" />
-                                    Taxation (LKR/Liter) - Optional Override
-                                </h3>
-                                <p className="text-xs text-slate-400 mb-3">
-                                    Leave at 0 to use configured rates. Enter values to override for testing.
-                                </p>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs text-slate-400 mb-1">Customs Duty</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={taxOverrides.customsDuty}
-                                            onChange={(e) => setTaxOverrides(prev => ({ ...prev, customsDuty: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }))}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs text-slate-400 mb-1">Excise Duty</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={taxOverrides.exciseDuty}
-                                            onChange={(e) => setTaxOverrides(prev => ({ ...prev, exciseDuty: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }))}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs text-slate-400 mb-1">PAL Levy</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={taxOverrides.palLevy}
-                                            onChange={(e) => setTaxOverrides(prev => ({ ...prev, palLevy: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 }))}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs text-slate-400 mb-1">SSCL Rate (%)</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={taxOverrides.ssclRate}
-                                            onChange={(e) => setTaxOverrides(prev => ({ ...prev, ssclRate: e.target.value === '' ? '' : parseFloat(e.target.value) || 1.25 }))}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-
-                            {/* Calculate Button */}
-                            <Button
-                                onClick={handleCalculate}
-                                className="w-full bg-red-900 hover:bg-red-800 text-white py-3 rounded-lg font-semibold transition-colors"
-                            >
-                                <Calculator className="w-5 h-5 mr-2" />
-                                Calculate Price
-                            </Button>
                         </div>
                     </div>
 
                     {/* Results Panel */}
-                    <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
-                        <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                            <TrendingUp className="w-5 h-5 text-green-400" />
-                            Calculation Results
-                        </h2>
+                    <div className="bg-white backdrop-blur-sm border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <div className="h-px bg-gradient-to-r from-transparent via-emerald-400 to-transparent" />
+                        <div className="p-6">
+                            <h2 className="text-sm font-bold text-slate-800 mb-6 flex items-center gap-2 uppercase tracking-widest">
+                                <TrendingUp className="w-4 h-4 text-emerald-500" />
+                                Calculation Results
+                            </h2>
 
-                        {breakdown ? (
-                            <div className="space-y-4">
-                                {/* MRP Display */}
-                                <div className="bg-gradient-to-br from-red-900/30 to-red-800/20 border border-red-700/50 rounded-xl p-6">
-                                    <p className="text-sm text-slate-400 mb-1">Maximum Retail Price (MRP)</p>
-                                    <p className="text-4xl font-bold text-white">{formatCurrency(breakdown.mrp)}</p>
-                                    <p className="text-xs text-slate-500 mt-1">per Liter for {getFuelTypeName(inputs.fuelType)}</p>
-                                </div>
+                            {breakdown ? (
+                                <div className="space-y-4">
+                                    {/* MRP Hero Display */}
+                                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Maximum Retail Price (MRP)</p>
+                                        <p className="text-5xl font-bold text-amber-600 font-financial">{formatCurrency(breakdown.mrp)}</p>
+                                        <p className="text-xs text-slate-500 mt-2 font-financial">per Liter — {getFuelTypeName(inputs.fuelType)}</p>
+                                    </div>
 
-                                {/* Breakdown */}
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-semibold text-slate-300 border-b border-slate-700 pb-2">
-                                        Cost Breakdown
-                                    </h3>
+                                    {/* Breakdown with progress bars */}
+                                    <div className="space-y-3">
+                                        <h3 className="text-[10px] font-bold text-slate-500 border-b border-slate-200 pb-2 uppercase tracking-widest">
+                                            Cost Breakdown
+                                        </h3>
 
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
-                                            <div>
-                                                <p className="text-sm font-medium text-white">V1 - Landed Cost</p>
-                                                <p className="text-xs text-slate-500">
-                                                    {formatCurrency(breakdown.v1_usd_per_liter, "USD")} × {inputs.exchangeRate}
-                                                </p>
+                                        {[
+                                            { label: "V1 — Landed Cost", sub: `${formatCurrency(breakdown.v1_usd_per_liter, "USD")} × ${inputs.exchangeRate}`, value: breakdown.v1_landedCost, color: "bg-sky-500" },
+                                            { label: "V2 — Processing Cost", sub: "Fixed operational cost", value: breakdown.v2_processingCost, color: "bg-teal-500" },
+                                            { label: "V3 — Admin Cost", sub: "2% of V1", value: breakdown.v3_adminCost, color: "bg-slate-400" },
+                                            { label: "V4 — Taxation", sub: "Customs + Excise + PAL + SSCL", value: breakdown.v4_taxation, color: "bg-amber-500" },
+                                        ].map((item, idx) => (
+                                            <div key={idx} className="p-3 bg-slate-50 rounded-lg animate-fade-in-up border border-slate-100" style={{ animationDelay: `${idx * 100}ms` }}>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-slate-900">{item.label}</p>
+                                                        <p className="text-[10px] text-slate-500">{item.sub}</p>
+                                                    </div>
+                                                    <p className="text-lg font-semibold text-slate-900 font-financial">{formatCurrency(item.value)}</p>
+                                                </div>
+                                                {/* Progress bar showing share of MRP */}
+                                                <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full ${item.color} rounded-full transition-all duration-700`}
+                                                        style={{ width: `${Math.min((item.value / breakdown.mrp) * 100, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-slate-500 mt-1 text-right font-financial">{((item.value / breakdown.mrp) * 100).toFixed(1)}%</p>
                                             </div>
-                                            <p className="text-lg font-semibold text-white">{formatCurrency(breakdown.v1_landedCost)}</p>
-                                        </div>
+                                        ))}
+                                    </div>
 
-                                        <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
-                                            <div>
-                                                <p className="text-sm font-medium text-white">V2 - Processing Cost</p>
-                                                <p className="text-xs text-slate-500">Fixed operational cost</p>
-                                            </div>
-                                            <p className="text-lg font-semibold text-white">{formatCurrency(breakdown.v2_processingCost)}</p>
-                                        </div>
-
-                                        <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
-                                            <div>
-                                                <p className="text-sm font-medium text-white">V3 - Admin Cost</p>
-                                                <p className="text-xs text-slate-500">2% of V1</p>
-                                            </div>
-                                            <p className="text-lg font-semibold text-white">{formatCurrency(breakdown.v3_adminCost)}</p>
-                                        </div>
-
-                                        <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
-                                            <div>
-                                                <p className="text-sm font-medium text-white">V4 - Taxation</p>
-                                                <p className="text-xs text-slate-500">Customs + Excise + PAL + SSCL</p>
-                                            </div>
-                                            <p className="text-lg font-semibold text-white">{formatCurrency(breakdown.v4_taxation)}</p>
-                                        </div>
+                                    {/* Footer metadata */}
+                                    <div className="border-t border-slate-200 pt-4 space-y-1.5 text-[10px] text-slate-500 font-financial">
+                                        <p>Evaporation Loss: {formatCurrency(breakdown.evaporationLoss, "USD")} (0.3%)</p>
+                                        <p>Cost/barrel: ${(inputs.mopsPrice + inputs.premium).toFixed(2)}</p>
+                                        <p>Formula: 2025 Gazette Revision</p>
                                     </div>
                                 </div>
-
-                                {/* Additional Info */}
-                                <div className="border-t border-slate-700 pt-4 space-y-2 text-xs text-slate-500">
-                                    <p>• Evaporation Loss: {formatCurrency(breakdown.evaporationLoss, "USD")} (0.3%)</p>
-                                    <p>• Cost per barrel: ${(inputs.mopsPrice + inputs.premium).toFixed(2)}</p>
-                                    <p>• Formula Version: 2025 Revision</p>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-64 text-center">
+                                    <Calculator className="w-12 h-12 text-slate-300 mb-4" />
+                                    <p className="text-slate-500 text-sm">
+                                        Enter parameters and click <span className="font-semibold text-amber-600">Calculate Price</span> to see results
+                                    </p>
                                 </div>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-64 text-center">
-                                <Calculator className="w-16 h-16 text-slate-700 mb-4" />
-                                <p className="text-slate-400 text-sm">
-                                    Enter parameters and click <span className="font-semibold">Calculate Price</span> to see results
-                                </p>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

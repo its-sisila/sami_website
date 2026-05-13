@@ -52,5 +52,4 @@ class MarketNewsItem(BaseModel):
 
 class MarketNewsResponse(BaseModel):
     """Response model for market news."""
-    global_news: list[MarketNewsItem]
-    local_news: list[MarketNewsItem]
+    news: list[MarketNewsItem]

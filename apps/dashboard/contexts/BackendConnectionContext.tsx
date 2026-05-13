@@ -5,11 +5,15 @@
  * Manages backend API connection status with health checks and auto-retry
  */
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { api } from '@/lib/api/client';
 import { BackendError } from '@/components/ui/backend-error';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
+
+// Number of consecutive health-check failures required before showing the error page.
+// This prevents a single transient network hiccup from hijacking the entire UI during demos.
+const FAILURE_THRESHOLD = 3;
 
 interface BackendConnectionContextType {
     status: ConnectionStatus;
@@ -26,6 +30,7 @@ interface BackendConnectionProviderProps {
 export function BackendConnectionProvider({ children }: BackendConnectionProviderProps) {
     const [status, setStatus] = useState<ConnectionStatus>('checking');
     const [isRetrying, setIsRetrying] = useState(false);
+    const consecutiveFailures = useRef(0);
 
     /**
      * Check backend connection
@@ -40,11 +45,19 @@ export function BackendConnectionProvider({ children }: BackendConnectionProvide
         try {
             await api.health.check();
 
+            consecutiveFailures.current = 0;
             setStatus('connected');
             console.log('[Backend Connection] Connected to backend server');
         } catch (error) {
-            setStatus('disconnected');
-            console.error('[Backend Connection] Failed to connect to backend:', error);
+            consecutiveFailures.current += 1;
+            console.error(
+                `[Backend Connection] Health check failed (${consecutiveFailures.current}/${FAILURE_THRESHOLD}):`,
+                error,
+            );
+            // Only show the full-page error after multiple consecutive failures
+            if (consecutiveFailures.current >= FAILURE_THRESHOLD) {
+                setStatus('disconnected');
+            }
         } finally {
             setIsRetrying(false);
         }
@@ -58,7 +71,7 @@ export function BackendConnectionProvider({ children }: BackendConnectionProvide
     }, [checkConnection]);
 
     /**
-     * Periodic health check (every 30 seconds) when connected
+     * Periodic health check (every 60 seconds) when connected
      */
     useEffect(() => {
         if (status !== 'connected') {
@@ -68,11 +81,17 @@ export function BackendConnectionProvider({ children }: BackendConnectionProvide
         const interval = setInterval(async () => {
             try {
                 await api.health.check();
+                consecutiveFailures.current = 0;
             } catch (error) {
-                console.error('[Backend Connection] Health check failed:', error);
-                setStatus('disconnected');
+                consecutiveFailures.current += 1;
+                console.warn(
+                    `[Backend Connection] Periodic check failed (${consecutiveFailures.current}/${FAILURE_THRESHOLD})`,
+                );
+                if (consecutiveFailures.current >= FAILURE_THRESHOLD) {
+                    setStatus('disconnected');
+                }
             }
-        }, 30000); // 30 seconds
+        }, 60000); // 60 seconds — longer interval to reduce noise during demos
 
         return () => clearInterval(interval);
     }, [status]);
