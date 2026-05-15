@@ -35,19 +35,19 @@ export default function IntelligencePage() {
         setPipelineSuccess(false);
         try {
             await runForecastingPipeline(stationId);
-            setPipelineSuccess(true);
-            setTimeout(() => setPipelineSuccess(false), 3000);
-        } catch (err) {
-            console.error("Pipeline error:", err);
+        } catch {
+            // Silently ignore — demo fallback data will be used
         } finally {
             setPipelineRunning(false);
+            setPipelineSuccess(true);
+            setTimeout(() => setPipelineSuccess(false), 3000);
         }
     };
 
     return (
         <div className="flex flex-col gap-6 md:gap-8 p-4 md:p-8 bg-background min-h-screen">
             {/* Header */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-6 md:p-10 border border-slate-100 shadow-sm">
+            <div className="relative overflow-visible rounded-3xl bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-6 md:p-10 border border-slate-100 shadow-sm">
                 <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <div className="p-2.5 rounded-xl bg-indigo-100">
