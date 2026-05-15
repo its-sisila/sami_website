@@ -273,11 +273,11 @@ export const inventory = {
      * Create a new nozzle
      */
     createNozzle: (data: {
-        nozzle_id: string;
+        nozzle_code: string;
         nozzle_name: string;
         tank_id: string;
         product_id: string;
-        pump_id?: string;
+        pump_id: string;
         digital_meter?: string;
         analog_meter?: string;
     }, stationId?: string) => {
@@ -313,7 +313,7 @@ export const inventory = {
     /**
      * Update a nozzle
      */
-    updateNozzle: (nozzleId: string, data: { nozzle_id: string; nozzle_name: string; tank_id: string; product_id: string; pump_id?: string }, stationId?: string) => {
+    updateNozzle: (nozzleId: string, data: { nozzle_code: string; nozzle_name: string; tank_id: string; product_id: string; pump_id: string }, stationId?: string) => {
         const url = stationId ? `/inventory/nozzles/${nozzleId}?station_id=${stationId}` : `/inventory/nozzles/${nozzleId}`;
         return request<Nozzle>(url, {
             method: 'PUT',

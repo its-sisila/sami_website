@@ -17,6 +17,7 @@ interface Nozzle {
     productName: string; // e.g., "Diesel", "Petrol 92"
     productPrice: number;
     startMeter: number;
+    isInitialZero?: boolean;
     endMeterDigital: number;
     endMeterAnalog: number;
     pumperId?: string; // Field for assigned pumper
@@ -199,6 +200,7 @@ export default function SalesPage() {
                         productName: n.product_name || 'Unknown',
                         productPrice: n.price_per_liter || 0,
                         startMeter: (lastReadings as Record<string, number>)[n.id] || 0,
+                        isInitialZero: ((lastReadings as Record<string, number>)[n.id] || 0) === 0,
                         endMeterDigital: (lastReadings as Record<string, number>)[n.id] || 0,
                         endMeterAnalog: 0,
                         isSubmitted: false,
@@ -654,18 +656,18 @@ export default function SalesPage() {
     };
 
     const handleCreateNozzle = async () => {
-        if (!newNozzleData.nozzle_id || !newNozzleData.display_name || !newNozzleData.tank_id || !newNozzleData.product_id) {
-            alert('Please fill in Nozzle ID, Display Name, Tank, and Product');
+        if (!newNozzleData.nozzle_id || !newNozzleData.display_name || !newNozzleData.tank_id || !newNozzleData.product_id || !newNozzleData.pump_id) {
+            alert('Please fill in Nozzle ID, Display Name, Tank, Product, and Pump');
             return;
         }
         setIsCreatingNozzle(true);
         try {
             await api.inventory.createNozzle({
-                nozzle_id: newNozzleData.nozzle_id,
+                nozzle_code: newNozzleData.nozzle_id,
                 nozzle_name: newNozzleData.display_name,
                 tank_id: newNozzleData.tank_id,
                 product_id: newNozzleData.product_id,
-                pump_id: newNozzleData.pump_id || undefined,
+                pump_id: newNozzleData.pump_id,
                 digital_meter: newNozzleData.digital_meter || undefined,
                 analog_meter: newNozzleData.analog_meter || undefined,
             });
@@ -1538,9 +1540,20 @@ export default function SalesPage() {
                                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                         <div className="space-y-1.5">
                                                             <label className="text-xs font-medium text-muted-foreground">Digital Start (B/F)</label>
-                                                            <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
-                                                                {currentNozzle.startMeter.toFixed(1)}
-                                                            </div>
+                                                            {currentNozzle.isInitialZero ? (
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="0000.0"
+                                                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                                                                    value={currentNozzle.startMeter || ""}
+                                                                    onChange={(e) => handleNozzleChange(currentNozzle.id, "startMeter", parseFloat(e.target.value) || 0)}
+                                                                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                                                />
+                                                            ) : (
+                                                                <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
+                                                                    {currentNozzle.startMeter.toFixed(1)}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div className="space-y-1.5">
                                                             <label className="text-xs font-medium text-foreground">Digital End Meter *</label>
@@ -1555,9 +1568,20 @@ export default function SalesPage() {
                                                         </div>
                                                         <div className="space-y-1.5">
                                                             <label className="text-xs font-medium text-muted-foreground">Analog Start (B/F)</label>
-                                                            <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
-                                                                {currentNozzle.startMeter.toFixed(1)}
-                                                            </div>
+                                                            {currentNozzle.isInitialZero ? (
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="0000.0"
+                                                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                                                                    value={currentNozzle.startMeter || ""}
+                                                                    onChange={(e) => handleNozzleChange(currentNozzle.id, "startMeter", parseFloat(e.target.value) || 0)}
+                                                                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                                                />
+                                                            ) : (
+                                                                <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
+                                                                    {currentNozzle.startMeter.toFixed(1)}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div className="space-y-1.5">
                                                             <label className="text-xs font-medium text-foreground">Analog End Meter</label>
@@ -2115,14 +2139,17 @@ export default function SalesPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-foreground mb-1">Pump ID</label>
-                                    <input
-                                        type="text"
+                                    <label className="block text-sm font-medium text-foreground mb-1">Pump Name *</label>
+                                    <select
                                         className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                                        placeholder="e.g., P-LAD-1"
                                         value={newNozzleData.pump_id}
                                         onChange={(e) => setNewNozzleData(prev => ({ ...prev, pump_id: e.target.value }))}
-                                    />
+                                    >
+                                        <option value="">Select Pump</option>
+                                        {availablePumps.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
 

@@ -555,7 +555,10 @@ async def complete_shift(
         sale = await record_sale_entry(entry_data, db)
         saved_sales.append(sale)
     
-    # 2. Save card sales
+    # 2. Save card sales and aggregate for settlements
+    terminal_totals = {}
+    terminal_batches = {}
+    
     for card_entry in payload.card_sales:
         card_sale = CardSale(
             id=uuid4(),
@@ -569,8 +572,35 @@ async def complete_shift(
         )
         db.add(card_sale)
         saved_card_sales.append(card_sale)
+        
+        # Aggregate totals per terminal for the pending settlement
+        if card_entry.terminal_id not in terminal_totals:
+            terminal_totals[card_entry.terminal_id] = Decimal("0")
+        terminal_totals[card_entry.terminal_id] += card_entry.amount
+        
+        # Capture the first available batch number for the settlement
+        if card_entry.batch_number and card_entry.terminal_id not in terminal_batches:
+            terminal_batches[card_entry.terminal_id] = card_entry.batch_number
+
+    # Create a pending CardSettlement for each terminal used in this shift
+    from app.modules.settlements.models import CardSettlement, SettlementStatus
+    from datetime import datetime
+    for term_id, total_amt in terminal_totals.items():
+        if total_amt > 0:
+            settlement = CardSettlement(
+                id=uuid4(),
+                terminal_id=term_id,
+                shift_id=shift_id,
+                batch_id=terminal_batches.get(term_id),
+                settlement_date=shift.shift_date,
+                settlement_time=datetime.utcnow().time(),
+                amount=total_amt,
+                status=SettlementStatus.pending
+            )
+            db.add(settlement)
     
-    # 3. Save credit sales
+    # 3. Save credit sales and update account balances
+    from app.modules.accounts.models import CompanyTransaction, TransactionType, CompanyAccount
     for credit_entry in payload.credit_sales:
         credit_sale = CreditSale(
             id=uuid4(),
@@ -586,6 +616,34 @@ async def complete_shift(
         )
         db.add(credit_sale)
         saved_credit_sales.append(credit_sale)
+        
+        # Automatically update the company account balance
+        if credit_entry.amount > 0:
+            # Create the debit transaction
+            desc = f"Fuel Sale"
+            if credit_entry.vehicle_number:
+                desc += f" (Vehicle: {credit_entry.vehicle_number})"
+            if credit_entry.po_number:
+                desc += f" (PO: {credit_entry.po_number})"
+                
+            transaction = CompanyTransaction(
+                id=uuid4(),
+                account_id=credit_entry.account_id,
+                shift_id=shift_id,
+                transaction_type=TransactionType.debit,
+                amount=credit_entry.amount,
+                description=desc,
+                reference_number=credit_entry.po_number,
+                recorded_by=completed_by
+            )
+            db.add(transaction)
+            
+            # Fetch and update the account balance
+            acc_stmt = select(CompanyAccount).where(CompanyAccount.id == credit_entry.account_id)
+            acc_result = await db.execute(acc_stmt)
+            account = acc_result.scalar_one_or_none()
+            if account:
+                account.current_balance += credit_entry.amount
     
     # 4. Update shift with cash collected and notes
     # NOTE: cash_collected column needs to be added to shifts table via migration
@@ -594,62 +652,78 @@ async def complete_shift(
     
     if payload.notes:
         shift.notes = (shift.notes or "") + f"\n{payload.notes}"
+        
+    # Mark shift as completed
+    shift.status = ShiftStatus.completed
+    if not shift.end_time:
+        from datetime import datetime
+        shift.end_time = datetime.utcnow()
+    
+    # Calculate totals
+    total_fuel_sales = sum(s.amount_lkr for s in saved_sales)
+    total_card_sales = sum(c.amount for c in saved_card_sales)
+    total_credit_sales = sum(cr.amount for cr in saved_credit_sales)
     
     # Flush all changes
     await db.flush()
     
     # 5. Dispatch Email Report Task
     if background_tasks:
-        from app.modules.stations.models import StationSettings, Station
-        from app.modules.inventory.models import Nozzle, FuelProduct
-        from app.core.email import send_shift_report_email
+        try:
+            from app.modules.stations.models import StationSettings, Station
+            from app.modules.inventory.models import Nozzle, FuelProduct
+            from app.core.email import send_shift_report_email
 
-        # Fetch station settings to get email configurations
-        station_stmt = select(Station, StationSettings).outerjoin(
-            StationSettings, Station.id == StationSettings.station_id
-        ).where(Station.id == shift.station_id)
-        station_res = await db.execute(station_stmt)
-        station_row = station_res.first()
+            # Fetch station settings to get email configurations
+            station_stmt = select(Station, StationSettings).outerjoin(
+                StationSettings, Station.id == StationSettings.station_id
+            ).where(Station.id == shift.station_id)
+            station_res = await db.execute(station_stmt)
+            station_row = station_res.first()
 
-        if station_row and station_row.StationSettings and station_row.StationSettings.shift_report_emails:
-            emails_str = station_row.StationSettings.shift_report_emails
-            to_emails = [e.strip() for e in emails_str.split(",") if e.strip()]
+            if station_row and station_row.StationSettings and station_row.StationSettings.shift_report_emails:
+                emails_str = station_row.StationSettings.shift_report_emails
+                to_emails = [e.strip() for e in emails_str.split(",") if e.strip()]
 
-            if to_emails:
-                # Gather sales details with names
-                sales_details = []
-                for s in saved_sales:
-                    # Fetch nozzle and product name
-                    np_stmt = select(Nozzle.nozzle_name, FuelProduct.name).join(
-                        FuelProduct, Nozzle.product_id == FuelProduct.id
-                    ).where(Nozzle.id == s.nozzle_id)
-                    np_res = await db.execute(np_stmt)
-                    np_row = np_res.first()
-                    if np_row:
-                        sales_details.append({
-                            "product_name": np_row.name,
-                            "nozzle_name": np_row.nozzle_name,
-                            "liters_sold": s.liters_sold,
-                            "amount_lkr": s.amount_lkr
-                        })
+                if to_emails:
+                    # Gather sales details with names
+                    sales_details = []
+                    for s in saved_sales:
+                        # Fetch nozzle and product name
+                        np_stmt = select(Nozzle.nozzle_name, FuelProduct.name).join(
+                            FuelProduct, Nozzle.product_id == FuelProduct.id
+                        ).where(Nozzle.id == s.nozzle_id)
+                        np_res = await db.execute(np_stmt)
+                        np_row = np_res.first()
+                        if np_row:
+                            sales_details.append({
+                                "product_name": np_row.name,
+                                "nozzle_name": np_row.nozzle_name,
+                                "liters_sold": s.liters_sold,
+                                "amount_lkr": s.amount_lkr
+                            })
 
-                report_data = {
-                    "total_fuel_sales": float(total_fuel_sales),
-                    "total_card_sales": float(total_card_sales),
-                    "total_credit_sales": float(total_credit_sales),
-                    "cash_collected": float(payload.cash_collected) if payload.cash_collected else 0,
-                    "sales": sales_details,
-                    "notes": payload.notes
-                }
+                    report_data = {
+                        "total_fuel_sales": float(total_fuel_sales),
+                        "total_card_sales": float(total_card_sales),
+                        "total_credit_sales": float(total_credit_sales),
+                        "cash_collected": float(payload.cash_collected) if payload.cash_collected else 0,
+                        "sales": sales_details,
+                        "notes": payload.notes
+                    }
 
-                background_tasks.add_task(
-                    send_shift_report_email,
-                    to_emails=to_emails,
-                    station_name=station_row.Station.name,
-                    shift_date=str(shift.shift_date),
-                    shift_type=shift.shift_type.value,
-                    report_data=report_data
-                )
+                    background_tasks.add_task(
+                        send_shift_report_email,
+                        to_emails=to_emails,
+                        station_name=station_row.Station.name,
+                        shift_date=str(shift.shift_date),
+                        shift_type=shift.shift_type.value,
+                        report_data=report_data
+                    )
+        except Exception as e:
+            # Bypass any errors in the email feature so the shift completion succeeds
+            import logging
+            logging.getLogger(__name__).error(f"Failed to prepare shift report email: {e}")
 
     return {
         "shift_id": str(shift_id),
