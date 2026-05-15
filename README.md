@@ -41,6 +41,8 @@ Fuel station management dashboard.
 
 | Module | Status | Features |
 |--------|--------|----------|
+| **Intelligence**| ✅ | SARIMA demand forecasting, anomaly detection, AI reorder alerts |
+| **Market**   | ✅ | Live crude/forex charts, Sri Lankan price formula, AI market news |
 | **Inventory** | ✅ | Tank levels, daily readings, fuel orders, deliveries |
 | **Sales** | ✅ | Shift management, meter readings, card/credit sales |
 | **Staff** | ✅ | Attendance, payroll, scheduling |
@@ -57,6 +59,8 @@ FastAPI backend connected to Supabase PostgreSQL.
 | Module | Endpoints |
 |--------|-----------|
 | Auth | `/auth/me`, token validation |
+| Intelligence | `/forecasts`, SARIMA models, Anomaly Z-Scores |
+| Market Data | `/pricing/market-snapshot`, `/pricing/market-news`, Gemini AI integration |
 | Inventory | `/inventory/tanks`, `/readings`, `/nozzles` |
 | Sales | `/sales/shifts`, `/history`, `/chart/weekly` |
 | Employees | `/employees`, `/attendance`, `/payroll` |
