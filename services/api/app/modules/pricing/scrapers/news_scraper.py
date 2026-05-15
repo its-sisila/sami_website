@@ -54,7 +54,7 @@ def _extract_image_url(description_html: str) -> Optional[str]:
 def _analyse_sentiments(headlines: list[str]) -> list[str]:
     """
     Batch-analyse headlines via Gemini. Returns list of sentiments
-    ('bullish', 'bearish', 'neutral') matching the input order.
+    ('likely increase', 'likely decrease', 'neutral') matching the input order.
     Falls back to all-neutral on any failure.
     """
     fallback = ["neutral"] * len(headlines)
@@ -75,12 +75,12 @@ def _analyse_sentiments(headlines: list[str]) -> list[str]:
         prompt = (
             "You are analysing energy/fuel market news headlines for a fuel station owner.\n"
             "For EACH headline below, classify the sentiment as:\n"
-            '- "bullish" if it suggests fuel/oil prices are RISING or supply is tightening\n'
-            '- "bearish" if it suggests fuel/oil prices are FALLING or supply is increasing\n'
+            '- "likely increase" if it suggests fuel/oil prices are RISING or supply is tightening\n'
+            '- "likely decrease" if it suggests fuel/oil prices are FALLING or supply is increasing\n'
             '- "neutral" if unclear or unrelated to price direction\n\n'
             f"Headlines:\n{numbered}\n\n"
             "Respond with ONLY a valid JSON array of strings in the same order, e.g.:\n"
-            '["bullish","neutral","bearish"]\n'
+            '["likely increase","neutral","likely decrease"]\n'
             "No explanation, no markdown — just the JSON array."
         )
 
@@ -96,7 +96,7 @@ def _analyse_sentiments(headlines: list[str]) -> list[str]:
 
         sentiments = json.loads(raw)
         if isinstance(sentiments, list) and len(sentiments) == len(headlines):
-            return [s if s in ("bullish", "bearish", "neutral") else "neutral" for s in sentiments]
+            return [s if s in ("likely increase", "likely decrease", "neutral") else "neutral" for s in sentiments]
 
         logger.warning("Sentiment array length mismatch, falling back to neutral")
         return fallback

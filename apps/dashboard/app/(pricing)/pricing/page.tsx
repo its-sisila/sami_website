@@ -418,7 +418,7 @@ export default function PricingPage() {
                 </div>
 
                 {/* ── Market Wire Ticker ── */}
-                {marketNews && (marketNews.global_news?.length > 0 || marketNews.local_news?.length > 0) && (
+                {marketNews && (marketNews.news?.length > 0) && (
                     <div className="mb-6 relative overflow-hidden rounded-lg border border-amber-200 bg-white ticker-scanline">
                         <div className="flex items-stretch">
                             <div className="flex items-center px-3 bg-amber-50 border-r border-amber-200 shrink-0">
@@ -426,10 +426,10 @@ export default function PricingPage() {
                             </div>
                             <div className="overflow-hidden py-2.5 px-3 flex-1">
                                 <div className="flex animate-marquee whitespace-nowrap gap-10">
-                                    {[...(marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
+                                    {(marketNews.news || []).slice(0, 6).map((item: any, i: number) => (
                                         <span key={i} className="inline-flex items-center gap-2 text-xs text-slate-600">
-                                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${item.sentiment === 'bullish' ? 'bg-emerald-500' :
-                                                item.sentiment === 'bearish' ? 'bg-red-500' :
+                                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${item.sentiment === 'likely increase' ? 'bg-emerald-500' :
+                                                item.sentiment === 'likely decrease' ? 'bg-red-500' :
                                                     'bg-slate-400'
                                                 }`} />
                                             <span className="font-medium text-slate-800">{item.source}</span>
@@ -438,10 +438,10 @@ export default function PricingPage() {
                                         </span>
                                     ))}
                                     {/* Duplicate for seamless loop */}
-                                    {[...(marketNews.global_news || []), ...(marketNews.local_news || [])].slice(0, 6).map((item: any, i: number) => (
+                                    {(marketNews.news || []).slice(0, 6).map((item: any, i: number) => (
                                         <span key={`dup-${i}`} className="inline-flex items-center gap-2 text-xs text-slate-600">
-                                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${item.sentiment === 'bullish' ? 'bg-emerald-500' :
-                                                item.sentiment === 'bearish' ? 'bg-red-500' :
+                                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${item.sentiment === 'likely increase' ? 'bg-emerald-500' :
+                                                item.sentiment === 'likely decrease' ? 'bg-red-500' :
                                                     'bg-slate-400'
                                                 }`} />
                                             <span className="font-medium text-slate-800">{item.source}</span>
@@ -960,14 +960,14 @@ export default function PricingPage() {
 
                                                     {/* Sentiment badge */}
                                                     {item.sentiment && item.sentiment !== 'neutral' && (
-                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider ${item.sentiment === 'bullish'
+                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wider ${item.sentiment === 'likely increase'
                                                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                                             : 'bg-red-50 text-red-700 border-red-200'
                                                             }`}>
-                                                            {item.sentiment === 'bullish' ? (
-                                                                <><TrendingUp className="w-3 h-3" /> Bullish</>
+                                                            {item.sentiment === 'likely increase' ? (
+                                                                <><TrendingUp className="w-3 h-3" /> Likely Increase</>
                                                             ) : (
-                                                                <><TrendingDown className="w-3 h-3" /> Bearish</>
+                                                                <><TrendingDown className="w-3 h-3" /> Likely Decrease</>
                                                             )}
                                                         </span>
                                                     )}
