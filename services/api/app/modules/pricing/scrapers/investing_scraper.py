@@ -49,13 +49,20 @@ def scrape_investing_historical_prices(
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
     
-    # Headers to mimic browser request (CRITICAL for bypassing blocks)
+    # Headers to mimic a modern browser request to bypass Cloudflare/WAF blocks
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "X-Requested-With": "XMLHttpRequest",
-        "Referer": f"https://www.investing.com/commodities/nymex-singapore-gasoil-platts-c1-futures-historical-data",
-        "Accept": "text/plain, */*; q=0.01",
+        "Referer": "https://www.investing.com/commodities/nymex-singapore-gasoil-platts-c1-futures-historical-data",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
         "Accept-Language": "en-US,en;q=0.9",
+        "Origin": "https://www.investing.com",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"'
     }
     
     payload = {

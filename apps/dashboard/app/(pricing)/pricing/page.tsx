@@ -273,7 +273,7 @@ export default function PricingPage() {
     };
 
     // ----- Market Snapshot state (on-demand) -----
-    const { data: marketSnapshot, isLoading: marketLoading, mutate: refetchMarket } = useSWR(
+    const { data: marketSnapshot, isLoading: marketLoading, isValidating: marketValidating, mutate: refetchMarket } = useSWR(
         '/pricing/market-snapshot',
         api.pricing.getMarketSnapshot,
         {
@@ -622,10 +622,10 @@ export default function PricingPage() {
                             </div>
                             <Button
                                 onClick={handleFetchMarket}
-                                disabled={marketLoading}
+                                disabled={marketValidating}
                                 className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 hover:border-emerald-300 font-medium px-5 py-2.5 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                {marketLoading ? (
+                                {marketValidating ? (
                                     <>
                                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                         Fetching…
