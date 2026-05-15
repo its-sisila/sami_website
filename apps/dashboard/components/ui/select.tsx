@@ -59,12 +59,12 @@ const SelectContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
         <div
             ref={ref}
             className={cn(
-                "absolute z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-80 w-full mt-1",
+                "absolute z-50 min-w-[8rem] rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-80 w-full mt-1",
                 className
             )}
             {...props}
         >
-            <div className="p-1 max-h-[var(--radix-select-content-available-height)] w-full overflow-y-auto w-full min-w-[var(--radix-select-trigger-width)]">
+            <div className="p-1 max-h-60 w-full overflow-y-auto">
                 {children}
             </div>
         </div>
